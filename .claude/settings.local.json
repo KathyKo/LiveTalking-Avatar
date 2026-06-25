@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show:*)",
+      "Bash(python:*)",
+      "Bash(pip install:*)",
+      "Bash(conda:*)",
+      "Bash(mkdir:*)",
+      "Bash(huggingface-cli download:*)",
+      "WebSearch",
+      "Bash(netstat:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(/c/Users/kohch/anaconda3/envs/livetalking/python.exe:*)",
+      "Bash(conda search:*)",
+      "Bash(tasklist:*)",
+      "Bash(taskkill:*)",
+      "Bash(kill:*)",
+      "Bash(curl:*)",
+      "Bash(powershell.exe:*)",
+      "Bash(xargs grep:*)",
+      "Bash(PYTHONPATH=\"C:/Job/Avatar/LiveTalking\" python:*)",
+      "Bash(PYTHONPATH=\"C:/Job/Avatar/LiveTalking\" \"$PYEXE\":*)",
+      "Bash(\"C:\\\\Users\\\\kohch\\\\anaconda3\\\\envs\\\\livetalking\\\\python.exe\":*)",
+      "Bash(timeout 30 C:\\\\Users\\\\kohch\\\\anaconda3\\\\envs\\\\livetalking\\\\python.exe:*)",
+      "Bash(powershell:*)",
+      "Bash(wmic process:*)",
+      "Bash(PYTHONPATH=\"C:/Job/Avatar/LiveTalking\" PYTHONIOENCODING=utf-8 \"$PYEXE\":*)",
+      "Bash(PYTHONPATH=\"C:/Job/Avatar/LiveTalking\" PYTHONIOENCODING=utf-8 \"/c/Users/kohch/anaconda3/envs/livetalking/python.exe\":*)",
+      "Bash(find:*)",
+      "Bash(\"/c/Users/kohch/anaconda3\\\\envs\\\\livetalking\\\\python.exe\":*)",
+      "Bash(PYTHONPATH=\"C:/Job/Avatar/LiveTalking\" \"/c/Users/kohch/anaconda3/envs/livetalking/python.exe\":*)"
+    ]
+  }
+}
