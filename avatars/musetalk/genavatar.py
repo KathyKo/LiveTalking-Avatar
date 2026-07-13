@@ -48,17 +48,17 @@ def create_dir(dir_path):
 
 def generate_avatar(video_path, avatar_id, save_path='./data/avatars', bbox_shift=0, extra_margin=10, parsing_mode='jaw', version='v15', progress_callback=None):
     """
-    生成avatar的核心逻辑
+    Core logic for generating an avatar
 
     Args:
-        video_path: 输入视频路径
+        video_path: Input video path
         avatar_id: Avatar ID
-        save_path: 保存根路径
-        bbox_shift: 边界框偏移
-        extra_margin: 额外边距
-        parsing_mode: 解析模式
-        version: 版本
-        progress_callback: 进度回调函数，接收 0-100 的整数
+        save_path: Root save path
+        bbox_shift: Bounding box shift
+        extra_margin: Extra margin
+        parsing_mode: Parsing mode
+        version: Version
+        progress_callback: Progress callback function, receives an integer from 0-100
     """
     avatar_save_path = os.path.join(save_path, avatar_id)
     save_full_path = os.path.join(avatar_save_path, 'full_imgs')
@@ -84,7 +84,11 @@ def generate_avatar(video_path, avatar_id, save_path='./data/avatars', bbox_shif
         if is_video_file(video_path):
             video2imgs(video_path, save_full_path, ext='png')
         else:
-            shutil.copyfile(video_path, f"{save_full_path}/{os.path.basename(video_path)}")
+            # Use a numbered filename to avoid the original (non-numeric) filename lingering and causing int() to fail when load_avatar sorts;
+            # also crop to even width and height, otherwise H.264 encoding will fail on odd dimensions and produce a black screen
+            _img = cv2.imread(video_path)
+            _img = _img[:_img.shape[0] - _img.shape[0] % 2, :_img.shape[1] - _img.shape[1] % 2]
+            cv2.imwrite(f"{save_full_path}/00000000.png", _img)
     else:
         files = os.listdir(video_path)
         files.sort()
@@ -156,7 +160,7 @@ def generate_avatar(video_path, avatar_id, save_path='./data/avatars', bbox_shif
     torch.save(input_latent_list, os.path.join(latents_out_path))
 
     if progress_callback: progress_callback(100)
-    print("Avatar 生成完成！")
+    print("Avatar generation complete!")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()

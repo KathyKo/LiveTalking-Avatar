@@ -1,5 +1,5 @@
 ###############################################################################
-#  全局会话管理器 (Session Manager)
+#  Global Session Manager
 ###############################################################################
 
 import asyncio
@@ -10,18 +10,19 @@ from avatars.base_avatar import BaseAvatar
 
 
 class MaxSessionError(Exception):
-    """会话数达到上限时抛出"""
+    """Raised when the session count reaches its limit"""
     pass
 
 def _rand_session_id() -> str:
-    """生成 UUID session ID"""
+    """Generate a UUID session ID"""
     return str(uuid.uuid4())
 
 class SessionManager:
     """
-    全局数字人会话管理器。
-    
-    统一管理 avatar_sessions 生命周期，并在脱离 WebRTC 时依然保持服务可用。
+    Global digital-human session manager.
+
+    Manages the avatar_sessions lifecycle in one place and keeps the service
+    available even when detached from WebRTC.
     """
     _instance = None
     
@@ -38,25 +39,25 @@ class SessionManager:
             self.initialized = True
 
     def set_max_session(self, n: int):
-        """设置最大并发会话数"""
+        """Set the maximum number of concurrent sessions"""
         self.max_session = max(1, n)
 
     def init_builder(self, build_session_fn):
-        """配置用于构建 avatar_session 的工厂函数"""
+        """Configure the factory function used to build an avatar_session"""
         self.build_session_fn = build_session_fn
         
     def get_session(self, sessionid: str) -> Optional[BaseAvatar]:
-        """获取已存活的会话"""
+        """Get a live session"""
         return self.sessions.get(sessionid)
 
     def has_session(self, sessionid: str) -> bool:
-        """检查会话是否存在"""
+        """Check whether a session exists"""
         return sessionid in self.sessions and self.sessions[sessionid] is not None
         
     async def create_session(self, params: dict, sessionid: str = None) -> str:
         """
-        在异步环境中创建一个新会话
-        如果 sessionid 为 None，则自动生成。
+        Create a new session in an async environment.
+        If sessionid is None, one is generated automatically.
         """
         if self.build_session_fn is None:
             raise Exception("SessionManager builder not initialized")
@@ -64,7 +65,7 @@ class SessionManager:
         if sessionid is None:
             sessionid = _rand_session_id()
             
-        # 检查是否达到最大会话数
+        # Check whether the maximum session count has been reached
         active_count = sum(1 for s in self.sessions.values() if s is not None)
         if active_count >= self.max_session:
             raise MaxSessionError(
@@ -72,10 +73,10 @@ class SessionManager:
             )
 
         logger.info('Creating sessionid=%s, current session num=%d', sessionid, active_count)
-        # 预先占位防止重复
+        # Reserve the slot in advance to prevent duplicates
         self.sessions[sessionid] = None
 
-        # 在线程池中构建 session（加载模型非常耗时）
+        # Build the session in a thread pool (loading the model is very expensive)
         avatar_session = await asyncio.get_event_loop().run_in_executor(
             None, self.build_session_fn, sessionid, params
         )
@@ -83,15 +84,15 @@ class SessionManager:
         return sessionid
         
     def add_session(self, sessionid: str, avatar_session: BaseAvatar):
-        """同步添加静态或外部管理的会话（供非服务端入口调用）"""
+        """Synchronously add a static or externally managed session (for non-server entry points)"""
         self.sessions[sessionid] = avatar_session
         
     def remove_session(self, sessionid: str):
-        """销毁会话资源"""
+        """Destroy session resources"""
         if sessionid in self.sessions:
             logger.info(f"Removing session {sessionid}")
-            # todo: 还可以主动调 avatar_session 释放
+            # todo: could also actively call avatar_session to release resources
             self.sessions.pop(sessionid, None)
 
-# 单例抛出
+# Singleton instance
 session_manager = SessionManager()

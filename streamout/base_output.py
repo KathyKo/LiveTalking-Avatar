@@ -1,5 +1,5 @@
 ###############################################################################
-#  输出模式基类 — 视频/音频输出接口
+#  Output mode base class — video/audio output interface
 ###############################################################################
 
 from abc import ABC, abstractmethod
@@ -13,13 +13,13 @@ if TYPE_CHECKING:
 
 class BaseOutput(ABC):
     """
-    输出传输模式抽象基类。
-    
-    实现者需要：
-    1. start(): 启动输出
-    2. push_video_frame(): 推送视频帧
-    3. push_audio_frame(): 推送音频帧
-    4. stop(): 关闭输出
+    Abstract base class for output transport modes.
+
+    Implementers must provide:
+    1. start(): start the output
+    2. push_video_frame(): push a video frame
+    3. push_audio_frame(): push an audio frame
+    4. stop(): close the output
     """
 
     def __init__(self, opt=None, parent: Optional['BaseAvatar'] = None, **kwargs):
@@ -28,25 +28,25 @@ class BaseOutput(ABC):
 
     @abstractmethod
     def start(self) -> None:
-        """启动输出通道"""
+        """Start the output channel"""
         ...
 
     @abstractmethod
     def push_video_frame(self, frame) -> None:
-        """推送视频帧"""
+        """Push a video frame"""
         ...
 
     @abstractmethod
     def push_audio_frame(self, frame:NDArray[np.int16], eventpoint=None) -> None:
-        """推送音频帧"""
+        """Push an audio frame"""
         ...
 
 
     def get_buffer_size(self) -> int:
-        """获取底层发送队列的积压帧数，用于引擎降速限流"""
+        """Get the number of backlogged frames in the underlying send queue, used to throttle the engine"""
         return 0
 
     @abstractmethod
     def stop(self) -> None:
-        """关闭输出通道"""
+        """Close the output channel"""
         ...

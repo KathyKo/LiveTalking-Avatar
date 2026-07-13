@@ -49,17 +49,17 @@ def get_smoothened_boxes(boxes, T):
 
 def generate_avatar(video_path, avatar_id, save_path='./data/avatars', img_size=96, pads=[0, 10, 0, 0], nosmooth=False, face_det_batch_size=16, progress_callback=None):
     """
-    生成avatar的核心逻辑
+    Core logic for generating an avatar
 
     Args:
-        video_path: 输入视频路径
+        video_path: Input video path
         avatar_id: Avatar ID
-        save_path: 保存根路径
-        img_size: 缩放后的图像大小
-        pads: 人脸框填充 [top, bottom, left, right]
-        nosmooth: 是否禁用平滑
-        face_det_batch_size: 人脸检测批处理大小
-        progress_callback: 进度回调函数，接收 0-100 的整数
+        save_path: Root save path
+        img_size: Resized image size
+        pads: Face box padding [top, bottom, left, right]
+        nosmooth: Whether to disable smoothing
+        face_det_batch_size: Face detection batch size
+        progress_callback: Progress callback function, receives an integer from 0-100
     """
     avatar_path = os.path.join(save_path, avatar_id)
     full_imgs_path = os.path.join(avatar_path, "full_imgs")
@@ -70,7 +70,7 @@ def generate_avatar(video_path, avatar_id, save_path='./data/avatars', img_size=
 
     if progress_callback: progress_callback(5)
 
-    print(f"正在处理视频: {video_path}")
+    print(f"Processing video: {video_path}")
     video2imgs(video_path, full_imgs_path, ext='png')
 
     if progress_callback: progress_callback(20)
@@ -80,7 +80,7 @@ def generate_avatar(video_path, avatar_id, save_path='./data/avatars', img_size=
 
     if progress_callback: progress_callback(40)
 
-    print('正在检测人脸...')
+    print('Detecting faces...')
     detector = face_detection.FaceAlignment(face_detection.LandmarksType._2D,
                                             flip_input=False, device=device)
 
@@ -122,7 +122,7 @@ def generate_avatar(video_path, avatar_id, save_path='./data/avatars', img_size=
     if progress_callback: progress_callback(85)
 
     coord_list = []
-    print(f"正在保存人脸图片和坐标...")
+    print(f"Saving face images and coordinates...")
     for idx, (rect, frame) in enumerate(zip(boxes, frames)):
         face_frame = frame[int(rect[1]):int(rect[3]), int(rect[0]):int(rect[2])]
         resized_crop_frame = cv2.resize(face_frame, (img_size, img_size))
@@ -133,13 +133,13 @@ def generate_avatar(video_path, avatar_id, save_path='./data/avatars', img_size=
             progress = 85 + int((idx + 1) / len(boxes) * 15)
             progress_callback(progress)
 
-    print(f"写入数据到坐标文件: {coords_path}")
+    print(f"Writing data to coordinates file: {coords_path}")
     with open(coords_path, 'wb') as f:
         pickle.dump(coord_list, f)
 
     del detector
     if progress_callback: progress_callback(100)
-    print("Avatar 生成完成！")
+    print("Avatar generation complete!")
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Inference code to lip-sync videos in the wild using Wav2Lip models')

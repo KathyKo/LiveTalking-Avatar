@@ -1,5 +1,5 @@
 ###############################################################################
-#  Output — WebRTC 输出
+#  Output — WebRTC output
 ###############################################################################
 
 from streamout.base_output import BaseOutput
@@ -14,14 +14,14 @@ if TYPE_CHECKING:
 @register("streamout", "webrtc")
 @register("streamout", "rtcpush")
 class WebRTCOutput(BaseOutput):
-    """WebRTC 输出模式 — 通过 aiortc 推送音视频"""
+    """WebRTC output mode — pushes audio/video via aiortc"""
 
     def __init__(self, opt=None, parent: Optional['BaseAvatar'] = None, **kwargs):
         super().__init__(opt, parent)
         self._player = None
 
     def start(self) -> None:
-        """WebRTC 输出由 rtc_manager 管理，此处无需额外启动"""
+        """WebRTC output is managed by rtc_manager, so no extra startup is needed here"""
         pass
 
     def push_video_frame(self, frame) -> None:

@@ -68,7 +68,7 @@ global_avatars = {} # avatar_id: payload
 rtc_manager = None
 
 def randN(N)->int:
-    '''生成长度为 N的随机数 '''
+    '''Generate a random number of length N '''
     min = pow(10, N - 1)
     max = pow(10, N)
     return random.randint(min, max - 1)
@@ -79,7 +79,7 @@ def build_avatar_session(sessionid:str, params:dict)->BaseAvatar:
 
     avatar_id = params.get('avatar',opt.avatar_id) 
     opt_this.avatar_id = avatar_id
-    ref_audio = params.get('refaudio','') #音色
+    ref_audio = params.get('refaudio','') # voice timbre
     ref_text = params.get('reftext','')
     if (avatar_id and avatar_id != opt.avatar_id):
         # Avoid reloading if already cached globally
@@ -89,10 +89,10 @@ def build_avatar_session(sessionid:str, params:dict)->BaseAvatar:
     else:
         # Default avatar loaded at startup
         avatar_this = global_avatars.get(opt.avatar_id)
-    if ref_audio: #请求参数配置了参考音频
+    if ref_audio: # request parameters configured a reference audio
         opt_this.REF_FILE = ref_audio
         opt_this.REF_TEXT = ref_text
-    custom_config=params.get('custom_config','') #动作编排配置
+    custom_config=params.get('custom_config','') # action orchestration configuration
     if custom_config:
         opt_this.customopt = json.loads(custom_config)
 
@@ -120,11 +120,11 @@ async def download_record(request):
 
 def main():
     global rtc_manager, opt, model,load_avatar
-    # 解析命令行参数
+    # Parse command-line arguments
     from config import parse_args
     opt = parse_args()
 
-    # ─── 加载 avatar 插件（触发 @register 注册）──────────────────────
+    # ─── Load avatar plugins (triggers @register registration) ──────────────────────
     _avatar_modules = {
         'musetalk':   'avatars.musetalk_avatar',
         'wav2lip':    'avatars.wav2lip_avatar',
@@ -150,6 +150,19 @@ def main():
         global_avatars[opt.avatar_id] = load_avatar(opt.avatar_id)
         warm_up(opt.batch_size,global_avatars[opt.avatar_id],160)
 
+    # Preload every other avatar under data/avatars so switching is instant
+    # (first load reads ~400 files; caching it up front removes the reconnect delay).
+    avatars_dir = os.path.join('data', 'avatars')
+    if os.path.isdir(avatars_dir):
+        for aid in sorted(os.listdir(avatars_dir)):
+            if aid in global_avatars or not os.path.isdir(os.path.join(avatars_dir, aid)):
+                continue
+            try:
+                global_avatars[aid] = load_avatar(aid)
+                logger.info(f"preloaded avatar: {aid}")
+            except Exception:
+                logger.exception(f"skip avatar {aid} (incompatible with model {opt.model})")
+
     # init rtc manager
     session_manager.set_max_session(opt.max_session)
     session_manager.init_builder(build_avatar_session)
@@ -174,8 +187,8 @@ def main():
     appasync.router.add_post("/offer", offer)
     appasync.router.add_get("/record/{sessionid}", download_record)
     
-    # 注册 server/routes.py 中的通用 API 路由
-    setup_routes(appasync) 
+    # Register the general API routes from server/routes.py
+    setup_routes(appasync)
 
     # Configure default CORS settings.
     cors = aiohttp_cors.setup(appasync, defaults={
@@ -195,7 +208,7 @@ def main():
     elif opt.transport=='rtcpush':
         pagename='rtcpushapi.html'
     logger.info('start http server; http://<serverip>:'+str(opt.listenport)+'/'+pagename)
-    # logger.info('如果使用webrtc，推荐访问webrtc集成前端: http://<serverip>:'+str(opt.listenport)+'/dashboard.html')
+    # logger.info('If using webrtc, we recommend visiting the integrated webrtc frontend: http://<serverip>:'+str(opt.listenport)+'/dashboard.html')
     def run_server(runner):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)

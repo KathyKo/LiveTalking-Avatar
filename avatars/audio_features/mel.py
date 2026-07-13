@@ -15,8 +15,8 @@
 #  limitations under the License.
 ###############################################################################
 #
-#  Mel 频谱音频特征提取 — 用于 Wav2Lip
-#  迁移自 lipasr.py
+#  Mel spectrogram audio feature extraction — used for Wav2Lip
+#  Migrated from lipasr.py
 #
 
 import time

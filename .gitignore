@@ -20,3 +20,6 @@ models/
 *.log
 dist
 .env
+
+.claude/
+.agents/

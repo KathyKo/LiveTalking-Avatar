@@ -15,7 +15,7 @@
 #  limitations under the License.
 ###############################################################################
 #
-#  MuseTalk 数字人 — 迁移自 musereal.py + museasr.py
+#  MuseTalk digital human — migrated from musereal.py + museasr.py
 #
 
 import math
@@ -93,7 +93,7 @@ def load_avatar(avatar_id):
 
 @torch.no_grad()
 def warm_up(batch_size,model):
-    # 预热函数
+    # Warm-up function
     print('warmup model...')
     vae, unet, pe, timesteps, audio_processor = model
     whisper_batch = np.ones((batch_size, 50, 384), dtype=np.uint8)
@@ -126,11 +126,11 @@ class MuseReal(BaseAvatar):
 
         self.asr = WhisperASR(opt,self,self.audio_processor)
         self.asr.warm_up()
-    
+
 
     def inference_batch(self, index, audiofeat_batch):
-        # 这里的 index 是针对当前 avatar 的索引
-        # 返回一个 batch 的推理结果，batch 大小由 self.batch_size 决定
+        # Here index is the index relative to the current avatar
+        # Returns a batch of inference results, the batch size is determined by self.batch_size
         length = len(self.input_latent_list_cycle)
         whisper_batch = np.stack(audiofeat_batch)
         latent_batch = []

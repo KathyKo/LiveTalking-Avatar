@@ -1,20 +1,20 @@
-# LiveTalking API 接口文档
+# LiveTalking API Reference
 
-基础路径：`http://<host>:<listenport>`
+Base path: `http://<host>:<listenport>`
 
-所有接口统一返回格式：
+All endpoints return a unified response format:
 
 ```json
 { "code": 0, "msg": "ok", "data": {} }
 ```
 
-`code` 为 0 表示成功，非 0 表示错误。
+A `code` of 0 indicates success; a non-zero value indicates an error.
 
 ---
 
 ## 1. WebRTC Offer
 
-交换 SDP 以建立 WebRTC 连接。
+Exchange SDP to establish a WebRTC connection.
 
 ```
 POST /offer
@@ -22,16 +22,16 @@ POST /offer
 
 **Content-Type**: `application/json`
 
-| 参数 | 必填 | 类型 | 默认值 | 说明 |
+| Parameter | Required | Type | Default | Description |
 |------|------|------|--------|------|
-| `sdp` | 是 | string | — | WebRTC Offer SDP |
-| `type` | 是 | string | — | 必须为 `offer` |
-| `avatar` | 否 | string | 启动参数值 | 指定数字人 ID |
-| `refaudio` | 否 | string | — | 参考音频 |
-| `reftext` | 否 | string | — | 参考文本 |
-| `custom_config` | 否 | string | — | 动作编排配置 JSON 字符串 |
+| `sdp` | Yes | string | — | WebRTC Offer SDP |
+| `type` | Yes | string | — | Must be `offer` |
+| `avatar` | No | string | Startup parameter value | Specifies the avatar ID |
+| `refaudio` | No | string | — | Reference audio |
+| `reftext` | No | string | — | Reference text |
+| `custom_config` | No | string | — | Action orchestration configuration JSON string |
 
-**响应**:
+**Response**:
 
 ```json
 {
@@ -43,9 +43,9 @@ POST /offer
 
 ---
 
-## 2. 文本驱动 (Human)
+## 2. Text-Driven (Human)
 
-发送文本驱动数字人说话，支持直接复读或 LLM 对话。
+Send text to make the avatar speak, supporting either direct echo or LLM conversation.
 
 ```
 POST /human
@@ -53,15 +53,15 @@ POST /human
 
 **Content-Type**: `application/json`
 
-| 参数 | 必填 | 类型 | 默认值 | 说明 |
+| Parameter | Required | Type | Default | Description |
 |------|------|------|--------|------|
-| `sessionid` | 是 | string | — | 会话 ID |
-| `text` | 是 | string | — | 输入文本 |
-| `type` | 是 | string | — | `echo`: 直接复读; `chat`: 触发 LLM 回答 |
-| `interrupt` | 否 | bool | false | 是否打断当前播报 |
-| `tts` | 否 | object | — | 透传给 TTS 的配置（如 `voice`, `emotion`） |
+| `sessionid` | Yes | string | — | Session ID |
+| `text` | Yes | string | — | Input text |
+| `type` | Yes | string | — | `echo`: direct echo; `chat`: trigger an LLM response |
+| `interrupt` | No | bool | false | Whether to interrupt the current playback |
+| `tts` | No | object | — | Configuration passed through to TTS (e.g. `voice`, `emotion`) |
 
-**响应**:
+**Response**:
 
 ```json
 { "code": 0, "msg": "ok" }
@@ -69,9 +69,9 @@ POST /human
 
 ---
 
-## 3. 音频驱动 (Human Audio)
+## 3. Audio-Driven (Human Audio)
 
-上传音频文件驱动数字人。
+Upload an audio file to drive the avatar.
 
 ```
 POST /humanaudio
@@ -79,12 +79,12 @@ POST /humanaudio
 
 **Content-Type**: `multipart/form-data`
 
-| 参数 | 必填 | 类型 | 说明 |
+| Parameter | Required | Type | Description |
 |------|------|------|------|
-| `sessionid` | 是 | string | 会话 ID |
-| `file` | 是 | file | 音频文件 |
+| `sessionid` | Yes | string | Session ID |
+| `file` | Yes | file | Audio file |
 
-**响应**:
+**Response**:
 
 ```json
 { "code": 0, "msg": "ok" }
@@ -92,19 +92,19 @@ POST /humanaudio
 
 ---
 
-## 4. 打断播报
+## 4. Interrupt Playback
 
-立即清空当前会话的音频队列。
+Immediately clear the current session's audio queue.
 
 ```
 POST /interrupt_talk
 ```
 
-| 参数 | 必填 | 类型 | 说明 |
+| Parameter | Required | Type | Description |
 |------|------|------|------|
-| `sessionid` | 是 | string | 会话 ID |
+| `sessionid` | Yes | string | Session ID |
 
-**响应**:
+**Response**:
 
 ```json
 { "code": 0, "msg": "ok" }
@@ -112,17 +112,17 @@ POST /interrupt_talk
 
 ---
 
-## 5. 查询说话状态
+## 5. Query Speaking Status
 
 ```
 POST /is_speaking
 ```
 
-| 参数 | 必填 | 类型 | 说明 |
+| Parameter | Required | Type | Description |
 |------|------|------|------|
-| `sessionid` | 是 | string | 会话 ID |
+| `sessionid` | Yes | string | Session ID |
 
-**响应**:
+**Response**:
 
 ```json
 {
@@ -134,20 +134,20 @@ POST /is_speaking
 
 ---
 
-## 6. 录制控制
+## 6. Recording Control
 
-控制服务器端的渲染录制。
+Control server-side render recording.
 
 ```
 POST /record
 ```
 
-| 参数 | 必填 | 类型 | 说明 |
+| Parameter | Required | Type | Description |
 |------|------|------|------|
-| `sessionid` | 是 | string | 会话 ID |
-| `type` | 是 | string | `start_record`: 开始录制; `end_record`: 停止并合成 |
+| `sessionid` | Yes | string | Session ID |
+| `type` | Yes | string | `start_record`: start recording; `end_record`: stop and compose |
 
-**响应**:
+**Response**:
 
 ```json
 { "code": 0, "msg": "ok" }
@@ -155,32 +155,32 @@ POST /record
 
 ---
 
-## 7. 下载录像
+## 7. Download Recording
 
-下载录制完成的 MP4 文件。
+Download the completed MP4 file.
 
 ```
 GET /record/{sessionid}
 ```
 
-**路径参数**: `sessionid` — 会话 ID
+**Path parameter**: `sessionid` — Session ID
 
-**响应**: MP4 文件流。若文件不存在返回 404。
+**Response**: MP4 file stream. Returns 404 if the file does not exist.
 
 ---
 
-## 8. 设置动作编排 (Audiotype)
+## 8. Set Action Orchestration (Audiotype)
 
 ```
 POST /set_audiotype
 ```
 
-| 参数 | 必填 | 类型 | 说明 |
+| Parameter | Required | Type | Description |
 |------|------|------|------|
-| `sessionid` | 是 | string | 会话 ID |
-| `audiotype` | 是 | int | 预定义的动作/状态索引 |
+| `sessionid` | Yes | string | Session ID |
+| `audiotype` | Yes | int | Predefined action/state index |
 
-**响应**:
+**Response**:
 
 ```json
 { "code": 0, "msg": "ok" }

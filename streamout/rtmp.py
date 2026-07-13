@@ -1,5 +1,5 @@
 ###############################################################################
-#  Output — RTMP 推流输出
+#  Output — RTMP streaming output
 ###############################################################################
 
 import subprocess
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 @register("streamout", "rtmp")
 class RTMPOutput(BaseOutput):
-    """RTMP 推流输出模式 — 基于 python_rtmpstream 库推送音视频"""
+    """RTMP streaming output mode — pushes audio/video via the python_rtmpstream library"""
 
     def __init__(self, opt=None, parent: Optional['BaseAvatar'] = None, **kwargs):
         super().__init__(opt, parent)
@@ -27,13 +27,13 @@ class RTMPOutput(BaseOutput):
         self.bitrate = getattr(opt, 'bitrate', 1000000)
         self._streamer = None
 
-        #统计视频帧率用
+        # used for measuring video frame rate
         self.framecount = 0
         self.lasttime = time.perf_counter()
         self.totaltime = 0
 
     def start(self) -> None:
-        """Streamer 延迟到第一帧视频到达时再根据实际宽高初始化"""
+        """Streamer initialization is deferred until the first video frame arrives, using its actual width/height"""
         import queue
         self._audio_queue = queue.Queue()
         self._quit_event = False

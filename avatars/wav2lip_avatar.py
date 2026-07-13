@@ -15,7 +15,7 @@
 #  limitations under the License.
 ###############################################################################
 #
-#  Wav2Lip 数字人 — 迁移自 lipreal.py + lipasr.py
+#  Wav2Lip digital human — migrated from lipreal.py + lipasr.py
 #
 
 import math
@@ -90,7 +90,7 @@ def load_avatar(avatar_id):
 
 @torch.no_grad()
 def warm_up(batch_size,model,modelres):
-    # 预热函数
+    # Warm-up function
     logger.info('warmup model...')
     img_batch = torch.ones(batch_size, 6, modelres, modelres).to(device)
     mel_batch = torch.ones(batch_size, 1, 80, 16).to(device)
@@ -115,8 +115,8 @@ class LipReal(BaseAvatar):
         self.asr.warm_up()
     
     def inference_batch(self, index, audiofeat_batch):
-        # 这里的 index 是针对当前 avatar 的索引
-        # 返回一个 batch 的推理结果，batch 大小由 self.batch_size 决定
+        # Here index is the index relative to the current avatar
+        # Returns a batch of inference results, the batch size is determined by self.batch_size
         length = len(self.face_list_cycle)
         img_batch = []
         for i in range(self.batch_size):

@@ -1,5 +1,5 @@
 ###############################################################################
-#  插件注册表 — 通过装饰器注册，按名称创建实例
+#  Plugin registry — register via decorators, create instances by name
 ###############################################################################
 
 from typing import Dict, Type, Any
@@ -16,9 +16,9 @@ _REGISTRY: Dict[str, Dict[str, Type]] = {
 
 def register(category: str, name: str):
     """
-    装饰器：注册插件类到全局注册表。
+    Decorator: register a plugin class into the global registry.
 
-    用法::
+    Usage::
 
         @register("tts", "edgetts")
         class EdgeTTS(BaseTTS): ...
@@ -34,7 +34,7 @@ def register(category: str, name: str):
 
 def create(category: str, name: str, **kwargs) -> Any:
     """
-    按名称创建插件实例。
+    Create a plugin instance by name.
 
     Usage::
 
@@ -51,7 +51,7 @@ def create(category: str, name: str, **kwargs) -> Any:
 
 
 def list_plugins(category: str = None) -> Dict[str, list]:
-    """列出已注册的插件"""
+    """List the registered plugins"""
     if category:
         return {category: list(_REGISTRY.get(category, {}).keys())}
     return {cat: list(plugins.keys()) for cat, plugins in _REGISTRY.items()}

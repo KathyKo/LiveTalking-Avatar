@@ -16,7 +16,7 @@ from registry import register
 class DoubaoTTS(BaseTTS):
     def __init__(self, opt, parent):
         super().__init__(opt, parent)
-        # 从配置中读取火山引擎参数
+        # Read Volcano Engine parameters from the configuration
         self.appid = os.getenv("DOUBAO_APPID")
         self.token = os.getenv("DOUBAO_TOKEN")
         _cluster = 'volcano_tts'
@@ -42,7 +42,7 @@ class DoubaoTTS(BaseTTS):
             },
             "request": {
                 "reqid": "xxx",
-                "text": "字节跳动语音合成。",
+                "text": "ByteDance text-to-speech.",
                 "text_type": "plain",
                 "operation": "xxx"
             }
@@ -53,7 +53,7 @@ class DoubaoTTS(BaseTTS):
         voice_type = ref_file #self.opt.REF_FILE
 
         try:
-            # 创建请求对象
+            # Build the request object
             default_header = bytearray(b'\x11\x10\x11\x00')
             submit_request_json = copy.deepcopy(self.request_json)
             submit_request_json["user"]["uid"] = self.parent.sessionid
@@ -97,13 +97,13 @@ class DoubaoTTS(BaseTTS):
                         break
         except Exception as e:
             logger.exception('doubao')
-        # # 检查响应状态码
+        # # Check the response status code
         # if response.status_code == 200:
-        #     # 处理响应数据
+        #     # Process the response data
         #     audio_data = base64.b64decode(response.json().get('data'))
         #     yield audio_data
         # else:
-        #     logger.error(f"请求失败，状态码: {response.status_code}")
+        #     logger.error(f"Request failed, status code: {response.status_code}")
         #     return
 
     def txt_to_audio(self, msg:tuple[str, dict]):

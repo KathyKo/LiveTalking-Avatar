@@ -1,6 +1,6 @@
 #
-#  HuBERT 音频特征提取 — 用于 Wav2LipLS / UltraLight
-#  迁移自 hubertasr.py
+#  HuBERT audio feature extraction — used for Wav2LipLS / UltraLight
+#  Migrated from hubertasr.py
 #
 
 import time

@@ -15,8 +15,8 @@
 #  limitations under the License.
 ###############################################################################
 #
-#  UltraLight 数字人 — 迁移自 lightreal.py
-#  使用 HubertASR 音频特征提取（与 wav2lipls 共享）
+#  UltraLight digital human — migrated from lightreal.py
+#  Uses HubertASR audio feature extraction (shared with wav2lipls)
 #
 
 import math
@@ -142,8 +142,8 @@ class LightReal(BaseAvatar):
         self.asr.warm_up()
 
     def inference_batch(self, index, audiofeat_batch):
-        # 这里的 index 是针对当前 avatar 的索引
-        # 返回一个 batch 的推理结果，batch 大小由 self.batch_size 决定
+        # Here index is the index relative to the current avatar
+        # Returns a batch of inference results, the batch size is determined by self.batch_size
         length = len(self.face_list_cycle)
         img_batch = []
 

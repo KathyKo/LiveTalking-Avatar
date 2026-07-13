@@ -1,5 +1,5 @@
 ###############################################################################
-#  Output — 虚拟摄像头输出
+#  Output — virtual camera output
 ###############################################################################
 
 import numpy as np
@@ -14,7 +14,7 @@ if TYPE_CHECKING:
 
 @register("streamout", "virtualcam")
 class VirtualCamOutput(BaseOutput):
-    """虚拟摄像头输出模式 — 通过 pyvirtualcam 输出到虚拟摄像头"""
+    """Virtual camera output mode — outputs to a virtual camera via pyvirtualcam"""
 
     def __init__(self, opt=None, parent: Optional['BaseAvatar'] = None, **kwargs):
         super().__init__(opt, parent)
@@ -47,10 +47,10 @@ class VirtualCamOutput(BaseOutput):
         stream.close()
 
     def start(self) -> None:
-        """启动虚拟摄像头音频线程，视频流延迟到第一帧接收时初始化"""
+        """Start the virtual camera audio thread; the video stream is initialized when the first frame is received"""
         try:
             import pyvirtualcam
-            # 仅仅验证包是否安装，延迟实例化 Camera
+            # Only verify the package is installed; defer instantiating the Camera
             
             # Start PyAudio playback thread
             import queue

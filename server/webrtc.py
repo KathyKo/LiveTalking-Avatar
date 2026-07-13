@@ -56,7 +56,7 @@ class PlayerStreamTrack(MediaStreamTrack):
         self.kind = kind
         self._player = player
         self._queue = queue.Queue(maxsize=100)
-        self.timelist = [] #记录最近包的时间戳
+        self.timelist = [] # record timestamps of recent packets
         self.current_frame_count = 0
         if self.kind == 'video':
             self.framecount = 0

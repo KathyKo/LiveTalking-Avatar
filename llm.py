@@ -1,57 +1,58 @@
-import time
 import os
+import json
+import requests
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from avatars.base_avatar import BaseAvatar
 from utils.logger import logger
 
-def llm_response(message,avatar_session:'BaseAvatar',datainfo:dict={}):
+API_URL = os.getenv("CHAT_API_URL", "https://voncierge-lang-agent.hipster-virtual.com/chat/sse")
+
+# Strip markdown symbols that TTS would read aloud
+_STRIP = str.maketrans("", "", "*#`")
+
+
+def llm_response(message, avatar_session: 'BaseAvatar', datainfo: dict = {}):
+    """Send user input to the voncierge SSE API; push complete sentences to TTS as they stream in."""
     try:
-        opt = avatar_session.opt
-        start = time.perf_counter()
-        from openai import OpenAI
-        client = OpenAI(
-            api_key=os.getenv("QWEN_API_KEY") or os.getenv("DASHSCOPE_API_KEY"),
-            base_url=os.getenv("QWEN_BASE_URL", "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-        )
-        end = time.perf_counter()
-        logger.info(f"llm Time init: {end-start}s,{message}")
-        completion = client.chat.completions.create(
-            model=os.getenv("QWEN_PLANNER_MODEL", "qwen-plus-2025-07-28"),
-            messages=[{'role': 'system', 'content': 'You are a knowledge assistant; please use concise and conversational language, avoid emojis, and use only English.'},
-                    {'role': 'user', 'content': message}],
+        session_id = "1212"
+        resp = requests.post(
+            API_URL,
+            json={"message": message, "session_id": session_id},
             stream=True,
-            # 通过以下设置，在流式输出的最后一行展示token使用信息
-            stream_options={"include_usage": True}
+            timeout=60,
         )
-        result=""
-        first = True
-        for chunk in completion:
-            if len(chunk.choices)>0:
-                #print(chunk.choices[0].delta.content)
-                if first:
-                    end = time.perf_counter()
-                    logger.info(f"llm Time to first chunk: {end-start}s")
-                    first = False
-                msg = chunk.choices[0].delta.content
-                if msg is None:
-                    continue
-                lastpos=0
-                #msglist = re.split('[,.!;:，。！?]',msg)
-                for i, char in enumerate(msg):
-                    if char in ",.!;:，。！？：；" :
-                        result = result+msg[lastpos:i+1]
-                        lastpos = i+1
-                        if len(result)>10:
-                            logger.info(result)
-                            avatar_session.put_msg_txt(result,datainfo)
-                            result=""
-                result = result+msg[lastpos:]
-        end = time.perf_counter()
-        logger.info(f"llm Time to last chunk: {end-start}s")
-        if result:
-            avatar_session.put_msg_txt(result,datainfo)
-        
-    except Exception as e:
-        logger.exception('llm exceptiopn:')
-        return   
+        resp.raise_for_status()
+
+        buffer = ""
+        for line in resp.iter_lines(decode_unicode=True):
+            if not line or not line.startswith("data:"):
+                continue
+            try:
+                obj = json.loads(line[5:].strip())
+            except Exception:
+                continue
+            buffer += obj.get("data", "")
+
+            # Flush a sentence on each sentence-ending punctuation to reduce latency
+            while True:
+                idx = next((i for i, c in enumerate(buffer) if c in ".!?。！？\n"), -1)
+                if idx < 0:
+                    break
+                seg, buffer = buffer[:idx + 1], buffer[idx + 1:]
+                seg = seg.translate(_STRIP).strip()
+                if seg:
+                    logger.info(f"api seg: {seg}")
+                    avatar_session.put_msg_txt(seg, datainfo)
+
+            if obj.get("final_token"):
+                break
+
+        tail = buffer.translate(_STRIP).strip()
+        if tail:
+            avatar_session.put_msg_txt(tail, datainfo)
+
+    except Exception:
+        logger.exception('chat api exception:')
+        return
+2

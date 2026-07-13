@@ -15,7 +15,7 @@
 #  limitations under the License.
 ###############################################################################
 #
-#  Avatar 基类 — 合并自 basereal.py，集成到 Async Pipeline
+#  Avatar base class — merged from basereal.py, integrated into the Async Pipeline
 #
 
 import math
@@ -57,7 +57,7 @@ from utils.image import read_imgs,mirror_index
 @dataclass
 class AudioFrameData:
     data: NDArray[np.float32]
-    type: int = 0  # 默认值
+    type: int = 0  # default value
     userdata: dict = field(default_factory=dict)
 
 class BaseAvatar:
@@ -96,7 +96,8 @@ class BaseAvatar:
             'indextts2': 'tts.indextts2',
             'azuretts': 'tts.azure',
             'qwentts': 'tts.qwentts',
-            'omnitts': 'tts.omnitts'
+            'omnitts': 'tts.omnitts',
+            'elevenlabs': 'tts.elevenlabs_tts'
         }
 
         if opt.tts in _tts_modules:
@@ -112,7 +113,7 @@ class BaseAvatar:
             'virtualcam': 'streamout.virtualcam'
         }
 
-        # 初始化 Output 模块
+        # Initialize the Output module
         if opt.transport in _output_modules:
             try:
                 importlib.import_module(_output_modules[opt.transport])
@@ -122,7 +123,7 @@ class BaseAvatar:
         else:
             logger.error(f"Output transport {opt.transport} not found in map.")
 
-    # 如果系统没有使用 pipeline，或者为了向后兼容原来的 ttsreal.py
+    # If the system does not use a pipeline, or for backward compatibility with the original ttsreal.py
     def put_msg_txt(self, msg, datainfo:dict={}):
         if hasattr(self, 'tts'):
             self.tts.put_msg_txt(msg, datainfo)
@@ -276,7 +277,7 @@ class BaseAvatar:
         cmd_combine_audio = f"ffmpeg -y -i {temp_aac} -i {temp_mp4} -c:v copy -c:a copy {output_file}"
         os.system(cmd_combine_audio)
         
-        # 删除临时文件
+        # Delete the temporary files
         try:
             os.remove(temp_aac)
             os.remove(temp_mp4)
@@ -308,7 +309,7 @@ class BaseAvatar:
             self.custom_audio_index[audiotype] = 0
             self.custom_index[audiotype] = 0
 
-    # ========================== 核心渲染及 Pipeline 桥接 ==========================
+    # ========================== Core rendering and Pipeline bridging ==========================
     def get_avatar_length(self):
         if hasattr(self, 'frame_list_cycle'):
             return len(self.frame_list_cycle)
@@ -321,8 +322,8 @@ class BaseAvatar:
         counttime = 0
         last_speaking = False
 
-        # syncnet_T = 12  # 时间步
-        # weight_dtype = torch.float16  # 数据类型
+        # syncnet_T = 12  # time steps
+        # weight_dtype = torch.float16  # data type
         # infernum = 0
         logger.info('start inference')
         while not quit_event.is_set():
@@ -341,16 +342,16 @@ class BaseAvatar:
                     is_all_silence = False               
                 audio_frames.append(audioframe)
 
-             # 检测状态变化
+             # Detect state changes
             current_speaking = not is_all_silence
 
-            if is_all_silence: #全为静音数据，只需要取fullimg，不需要推理
+            if is_all_silence: #all silent data, only need to take fullimg, no inference required
                 for i in range(self.batch_size):
                     idx = mirror_index(length, index)
                     self.res_frame_queue.put((None, audio_frames[i*2:i*2+2], idx))
                     index = index + 1
             else:
-                if current_speaking and not last_speaking and self.custom_index.get(1) is not None: #从静音到说话切换,并且有自定义静态视频
+                if current_speaking and not last_speaking and self.custom_index.get(1) is not None: #switching from silence to speaking, and there is a custom static video
                     index = 0
                 t = time.perf_counter()
 
@@ -367,19 +368,19 @@ class BaseAvatar:
                     index = index + 1
                     
             if current_speaking != last_speaking:
-                logger.info(f"inference 状态切换：{'说话' if last_speaking else '静音'} → {'说话' if current_speaking else '静音'}")
+                logger.info(f"inference state switch: {'speaking' if last_speaking else 'silence'} → {'speaking' if current_speaking else 'silence'}")
                 last_speaking = current_speaking         
         logger.info('baseavatar inference thread stop')
 
     def process_frames(self,quit_event):
-        enable_transition = False  # 设置为False禁用过渡效果，True启用
+        enable_transition = False  # Set to False to disable the transition effect, True to enable it
         
         _last_speaking = False
         _transition_start = time.time()
         if enable_transition:
-            _transition_duration = 0.1  # 过渡时间
-            _last_silent_frame = None  # 静音帧缓存
-            _last_speaking_frame = None  # 说话帧缓存
+            _transition_duration = 0.1  # transition duration
+            _last_silent_frame = None  # silent frame cache
+            _last_speaking_frame = None  # speaking frame cache
 
         self.output.start()
         
@@ -390,17 +391,17 @@ class BaseAvatar:
             except queue.Empty:
                 continue
             
-            # 检测状态变化
+            # Detect state changes
             current_speaking = not (audio_frames[0].type!=0 and audio_frames[1].type!=0)
             if current_speaking != _last_speaking:
-                logger.info(f"状态切换：{'说话' if _last_speaking else '静音'} → {'说话' if current_speaking else '静音'}")
+                logger.info(f"state switch: {'speaking' if _last_speaking else 'silence'} → {'speaking' if current_speaking else 'silence'}")
                 _transition_start = time.time()
             _last_speaking = current_speaking
 
-            if audio_frames[0].type!=0 and audio_frames[1].type!=0: #全为静音数据，只需要取fullimg
+            if audio_frames[0].type!=0 and audio_frames[1].type!=0: #all silent data, only need to take fullimg
                 self.speaking = False
                 audiotype = audio_frames[0].type
-                if self.custom_index.get(audiotype) is not None: #有自定义视频
+                if self.custom_index.get(audiotype) is not None: #there is a custom video
                     mirindex = mirror_index(len(self.custom_img_cycle[audiotype]),self.custom_index[audiotype])
                     target_frame = self.custom_img_cycle[audiotype][mirindex]
                     self.custom_index[audiotype] += 1
@@ -408,13 +409,13 @@ class BaseAvatar:
                     target_frame = self.frame_list_cycle[idx]
                 
                 if enable_transition:
-                    # 说话→静音过渡
+                    # speaking → silence transition
                     if time.time() - _transition_start < _transition_duration and _last_speaking_frame is not None:
                         alpha = min(1.0, (time.time() - _transition_start) / _transition_duration)
                         combine_frame = cv2.addWeighted(_last_speaking_frame, 1-alpha, target_frame, alpha, 0)
                     else:
                         combine_frame = target_frame
-                    # 缓存静音帧
+                    # cache the silent frame
                     _last_silent_frame = combine_frame.copy()
                 else:
                     combine_frame = target_frame
@@ -426,20 +427,20 @@ class BaseAvatar:
                     logger.warning(f"paste_back_frame error: {e}")
                     continue
                 if enable_transition:
-                    # 静音→说话过渡
+                    # silence → speaking transition
                     if time.time() - _transition_start < _transition_duration and _last_silent_frame is not None:
                         alpha = min(1.0, (time.time() - _transition_start) / _transition_duration)
                         combine_frame = cv2.addWeighted(_last_silent_frame, 1-alpha, current_frame, alpha, 0)
                     else:
                         combine_frame = current_frame
-                    # 缓存说话帧
+                    # cache the speaking frame
                     _last_speaking_frame = combine_frame.copy()
                 else:
                     combine_frame = current_frame
 
             cv2.putText(combine_frame, "LiveTalking", (10, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.3, (128,128,128), 1)
             
-            # 使用统一输出接口推送视频帧
+            # Push the video frame using the unified output interface
             self.output.push_video_frame(combine_frame)
             self.record_video_data(combine_frame)
 
@@ -447,7 +448,7 @@ class BaseAvatar:
                 #frame,type,eventpoint = audio_frame
                 frame = (audio_frame.data * 32767).astype(np.int16)
 
-                # 使用统一输出接口推送音频帧
+                # Push the audio frame using the unified output interface
                 self.output.push_audio_frame(frame, audio_frame.userdata)
                 self.record_audio_data(frame)
                 

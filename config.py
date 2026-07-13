@@ -109,7 +109,9 @@ def parse_args():
     # When REF_FILE is not given, auto-pick an edgetts voice by avatar_id.
     # Note: 'woman' contains 'man', so check 'woman' first.
     if opt.REF_FILE is None:
-        if 'woman' in opt.avatar_id:
+        if opt.tts == 'elevenlabs':
+            opt.REF_FILE = 'SEWXl8lPSO01tdGbWECX'
+        elif 'woman' in opt.avatar_id:
             opt.REF_FILE = 'en-US-JennyNeural'
         elif 'man' in opt.avatar_id:
             opt.REF_FILE = 'en-US-GuyNeural'

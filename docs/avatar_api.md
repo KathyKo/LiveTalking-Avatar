@@ -1,35 +1,35 @@
-# Avatar 生成接口 API 文档
+# Avatar Generation API Reference
 
-基础路径：`http://<host>:<listenport>`
+Base path: `http://<host>:<listenport>`
 
 ---
 
-## 1. 创建 Avatar 生成任务
+## 1. Create Avatar Generation Task
 
 ```
 POST /api/avatar/task
 ```
 
-**Content-Type**: `application/json` 或 `multipart/form-data`（上传文件时）
+**Content-Type**: `application/json` or `multipart/form-data` (when uploading a file)
 
-| 参数 | 必填 | 类型 | 默认值 | 说明 |
+| Parameter | Required | Type | Default | Description |
 |------|------|------|--------|------|
-| `model` | 是 | string | — | 模型类型：`wav2lip` / `musetalk` |
-| `avatar_id` | 是 | string | — | Avatar 唯一标识符 |
-| `video_file` | 否 | file | — | 上传的视频文件（multipart），保存到 `./data/tmp/` |
-| `video_path` | 条件 | string | — | 视频文件本地路径（未上传 `video_file` 时必填） |
-| `img_size` | 否 | int | 256 | 输出图像尺寸 |
-| `nosmooth` | 否 | bool | false | 禁用人脸检测平滑 |
-| `bbox_shift` | 否 | int | 0 | 人脸框偏移（musetalk） |
-| `extra_margin` | 否 | int | 10 | 人脸裁剪额外边距（musetalk） |
-| `pads` | 否 | string | "0 10 0 0" | 填充：上 下 左 右（空格分隔） |
-| `parsing_mode` | 否 | string | "jaw" | 人脸解析模式（musetalk） |
-| `version` | 否 | string | "v15" | MuseTalk 版本：`v1` / `v15` |
-| `face_det_batch_size` | 否 | int | 16 | 人脸检测批大小（wav2lip） |
-| `task_id` | 否 | string | 自动UUID | 自定义任务ID |
-| `notifyurl` | 否 | string | — | 回调URL，任务状态变更时POST通知 |
+| `model` | Yes | string | — | Model type: `wav2lip` / `musetalk` |
+| `avatar_id` | Yes | string | — | Unique avatar identifier |
+| `video_file` | No | file | — | Uploaded video file (multipart), saved to `./data/tmp/` |
+| `video_path` | Conditional | string | — | Local path to the video file (required when `video_file` is not uploaded) |
+| `img_size` | No | int | 256 | Output image size |
+| `nosmooth` | No | bool | false | Disable face detection smoothing |
+| `bbox_shift` | No | int | 0 | Face box offset (musetalk) |
+| `extra_margin` | No | int | 10 | Extra margin for face cropping (musetalk) |
+| `pads` | No | string | "0 10 0 0" | Padding: top bottom left right (space-separated) |
+| `parsing_mode` | No | string | "jaw" | Face parsing mode (musetalk) |
+| `version` | No | string | "v15" | MuseTalk version: `v1` / `v15` |
+| `face_det_batch_size` | No | int | 16 | Face detection batch size (wav2lip) |
+| `task_id` | No | string | Auto UUID | Custom task ID |
+| `notifyurl` | No | string | — | Callback URL; a POST notification is sent when the task status changes |
 
-**响应**:
+**Response**:
 
 ```json
 {
@@ -43,15 +43,15 @@ POST /api/avatar/task
 
 ---
 
-## 2. 查询任务状态
+## 2. Query Task Status
 
 ```
 GET /api/avatar/task/{task_id}
 ```
 
-**路径参数**: `task_id` — 创建任务时返回的ID
+**Path parameter**: `task_id` — the ID returned when the task was created
 
-**响应**:
+**Response**:
 
 ```json
 {
@@ -72,19 +72,19 @@ GET /api/avatar/task/{task_id}
 }
 ```
 
-`status` 取值：`pending` → `running` → `completed` / `failed`
+`status` values: `pending` → `running` → `completed` / `failed`
 
-`progress`：0-100 整数
+`progress`: integer from 0 to 100
 
 ---
 
-## 3. 列出所有任务
+## 3. List All Tasks
 
 ```
 GET /api/avatar/tasks
 ```
 
-**响应**:
+**Response**:
 
 ```json
 {
@@ -99,42 +99,42 @@ GET /api/avatar/tasks
 }
 ```
 
-按 `start_time` 降序排列。
+Sorted by `start_time` in descending order.
 
 ---
 
-## 4. 删除任务
+## 4. Delete Task
 
 ```
 DELETE /api/avatar/task/{task_id}
 ```
 
-**路径参数**: `task_id`
+**Path parameter**: `task_id`
 
-**响应**:
+**Response**:
 
 ```json
-// 成功
+// Success
 { "code": 0, "msg": "ok", "data": { "msg": "Task deleted" } }
 
-// 失败 - 任务不存在
+// Failure - task does not exist
 { "code": -1, "msg": "Task not found" }
 
-// 失败 - 任务不可删除
+// Failure - task cannot be deleted
 { "code": -1, "msg": "Task is in running state, cannot delete" }
 ```
 
-仅 `pending` 状态的任务可删除。
+Only tasks in the `pending` state can be deleted.
 
 ---
 
-## 模型与参数对应关系
+## Model and Parameter Mapping
 
-| model | 专有参数 | 生成模块 |
+| model | Specific parameters | Generation module |
 |-------|----------|----------|
 | `wav2lip` | `face_det_batch_size`, `pads`, `nosmooth`, `img_size` | `avatars/wav2lip/genavatar.py` |
 | `musetalk` | `bbox_shift`, `extra_margin`, `parsing_mode`, `version` | `avatars/musetalk/genavatar.py` |
 
-## 生成输出
+## Generation Output
 
-Avatar 数据保存在 `<data_path>/<avatar_id>/` 目录下，包含：`full_imgs/`、`face_imgs/`、`coords.pkl` 及模型特定文件。生成完成后可直接通过 `--avatar_id <avatar_id>` 启动服务。
+Avatar data is saved under the `<data_path>/<avatar_id>/` directory, including: `full_imgs/`, `face_imgs/`, `coords.pkl`, and model-specific files. Once generation is complete, you can start the service directly with `--avatar_id <avatar_id>`.

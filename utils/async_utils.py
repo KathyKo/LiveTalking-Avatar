@@ -1,5 +1,5 @@
 ###############################################################################
-#  异步辅助工具
+#  Async utility helpers
 ###############################################################################
 
 import asyncio
@@ -10,8 +10,8 @@ T = TypeVar("T")
 
 async def merge_async_iters(*iterators: AsyncIterator[T]) -> AsyncIterator[T]:
     """
-    合并多个异步迭代器，按先到先得顺序 yield。
-    所有迭代器结束后退出。
+    Merge multiple async iterators, yielding items in arrival order.
+    Exits when all iterators are exhausted.
     """
     queue: asyncio.Queue = asyncio.Queue()
     sentinel = object()
@@ -40,7 +40,7 @@ async def merge_async_iters(*iterators: AsyncIterator[T]) -> AsyncIterator[T]:
 
 
 async def async_queue_iter(q: asyncio.Queue, sentinel=None) -> AsyncIterator:
-    """将 asyncio.Queue 转为异步迭代器，收到 sentinel 时退出"""
+    """Wrap an asyncio.Queue as an async iterator; exits when sentinel is received."""
     while True:
         item = await q.get()
         if item is sentinel:

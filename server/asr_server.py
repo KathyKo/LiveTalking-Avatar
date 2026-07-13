@@ -12,6 +12,7 @@
 #  Licensed under the Apache License, Version 2.0
 ###############################################################################
 
+import os
 import json
 import time
 import io
@@ -24,43 +25,61 @@ from utils.logger import logger
 
 # ─── Lazy Model Loader ────────────────────────────────────────────────────
 
-_sensevoice_model = None
+# Default: Qwen3-ASR (strong zh-en code-switching).
+# ASR_MODEL=iic/SenseVoiceSmall  -> revert to SenseVoice
+# ASR_MODEL=elevenlabs           -> cloud ElevenLabs Scribe (needs ELEVENLABS_API_KEY)
+_ASR_MODEL_ID = os.environ.get("ASR_MODEL", "Qwen/Qwen3-ASR-0.6B")
+_IS_SENSEVOICE = "sensevoice" in _ASR_MODEL_ID.lower()
+_IS_ELEVENLABS = _ASR_MODEL_ID.lower() == "elevenlabs"
+
+_asr_model = None       # funasr AutoModel, or ElevenLabs client in elevenlabs mode
 
 
-def _load_sensevoice():
+def _load_asr_model():
     """
-    Load the SenseVoice model on first call (lazy singleton).
+    Load the ASR model on first call (lazy singleton).
     Thread-safe via the GIL — only one thread will enter the init block.
     """
-    global _sensevoice_model
-    if _sensevoice_model is not None:
-        return _sensevoice_model
+    global _asr_model
+    if _asr_model is not None:
+        return _asr_model
 
     import torch
     from funasr import AutoModel
 
     device = "cuda:0" if torch.cuda.is_available() else "cpu"
     logger.info(
-        f"[ASR] Loading SenseVoiceSmall on device='{device}' "
-        f"(first run will download ~500MB from ModelScope)..."
+        f"[ASR] Loading {_ASR_MODEL_ID} on device='{device}' "
+        f"(first run downloads the model from ModelScope)..."
     )
 
     t0 = time.perf_counter()
-    _sensevoice_model = AutoModel(
-        model="iic/SenseVoiceSmall",
+    _asr_model = AutoModel(
+        model=_ASR_MODEL_ID,
         vad_model="fsmn-vad",
         vad_kwargs={"max_single_segment_time": 30000},
         device=device,
         trust_remote_code=True,
     )
     elapsed = time.perf_counter() - t0
-    logger.info(f"[ASR] ✅ SenseVoiceSmall ready — loaded in {elapsed:.1f}s on {device}")
-    return _sensevoice_model
+    logger.info(f"[ASR] ✅ {_ASR_MODEL_ID} ready — loaded in {elapsed:.1f}s on {device}")
+    return _asr_model
+
+
+def _elevenlabs_transcribe(wav_buf) -> str:
+    """Transcribe via ElevenLabs Scribe. Reuses the module-level client singleton."""
+    global _asr_model
+    if _asr_model is None:
+        from elevenlabs.client import ElevenLabs
+        _asr_model = ElevenLabs(api_key=os.environ["ELEVENLABS_API_KEY"])
+        logger.info("[ASR] ✅ ElevenLabs Scribe client ready")
+    res = _asr_model.speech_to_text.convert(file=wav_buf, model_id="scribe_v1")
+    return res.text or ""
 
 
 def _run_inference(audio_float32: np.ndarray, sample_rate: int, use_itn: bool):
     """
-    Run SenseVoice inference on a float32 audio array.
+    Run ASR inference on a float32 audio array.
 
     This is a **blocking** call — always invoke from ``run_in_executor``.
 
@@ -70,33 +89,34 @@ def _run_inference(audio_float32: np.ndarray, sample_rate: int, use_itn: bool):
         (transcribed_text, inference_ms, audio_duration_s)
     """
     import soundfile as sf
-    from funasr.utils.postprocess_utils import rich_transcription_postprocess
 
-    model = _load_sensevoice()
-
-    # Write to in-memory WAV so funasr can read the sample rate from the header
+    # Write to in-memory WAV so the backend can read the sample rate from the header
     wav_buf = io.BytesIO()
     sf.write(wav_buf, audio_float32, sample_rate, format="WAV")
     wav_buf.seek(0)
 
     t0 = time.perf_counter()
-    res = model.generate(
-        input=wav_buf,
-        cache={},
-        language="auto",
-        use_itn=use_itn,
-        batch_size_s=60,
-    )
+    if _IS_ELEVENLABS:
+        text = _elevenlabs_transcribe(wav_buf)
+    else:
+        model = _load_asr_model()
+        if _IS_SENSEVOICE:
+            res = model.generate(input=wav_buf, cache={}, language="auto",
+                                 use_itn=use_itn, batch_size_s=60)
+        else:
+            res = model.generate(input=wav_buf, cache={}, batch_size_s=60)
+        text = ""
+        if res and len(res) > 0 and res[0].get("text"):
+            text = res[0]["text"]
+            if _IS_SENSEVOICE:
+                from funasr.utils.postprocess_utils import rich_transcription_postprocess
+                text = rich_transcription_postprocess(text)
     inference_ms = (time.perf_counter() - t0) * 1000
-
-    text = ""
-    if res and len(res) > 0 and res[0].get("text"):
-        text = rich_transcription_postprocess(res[0]["text"])
 
     audio_duration_s = len(audio_float32) / sample_rate
 
     logger.info(
-        f"[ASR] ✅ SenseVoice inference complete\n"
+        f"[ASR] ✅ inference complete\n"
         f"       ├─ Latency     : {inference_ms:>8.0f} ms\n"
         f"       ├─ Audio length: {audio_duration_s:>8.1f} s\n"
         f"       ├─ RTF         : {inference_ms / 1000 / max(audio_duration_s, 0.001):>8.3f}\n"
@@ -246,10 +266,32 @@ async def asr_websocket_handler(request):
     return ws
 
 
+# ─── Startup Warmup ────────────────────────────────────────────────────────
+
+def warmup_async():
+    """Load the ASR model and run one dummy inference in a background thread,
+    so the first real request doesn't pay the model-load + CUDA-init cost."""
+    import threading
+
+    def _warm():
+        try:
+            if _IS_ELEVENLABS:
+                return  # cloud API — nothing to preload, and a dummy call costs credits
+            _load_asr_model()
+            _run_inference(np.zeros(SAMPLE_RATE, dtype=np.float32), SAMPLE_RATE, False)
+            logger.info("[ASR] 🔥 Warmup complete — first request will be fast")
+        except Exception:
+            logger.exception("[ASR] Warmup failed (will retry lazily on first request)")
+
+    threading.Thread(target=_warm, daemon=True).start()
+
+
 # ─── Availability Check ───────────────────────────────────────────────────
 
 def is_funasr_available() -> bool:
-    """Return True if the ``funasr`` package is importable."""
+    """Return True if the configured ASR backend is usable."""
+    if _IS_ELEVENLABS:
+        return bool(os.environ.get("ELEVENLABS_API_KEY"))
     try:
         import funasr  # noqa: F401
         return True
