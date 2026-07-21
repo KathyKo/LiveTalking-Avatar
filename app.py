@@ -129,6 +129,7 @@ def main():
         'musetalk':   'avatars.musetalk_avatar',
         'wav2lip':    'avatars.wav2lip_avatar',
         'ultralight': 'avatars.ultralight_avatar',
+        'ditto':      'avatars.ditto_avatar',
     }
     import importlib
     avatar_mod = importlib.import_module(_avatar_modules[opt.model])
@@ -149,6 +150,9 @@ def main():
         model = load_model(opt)
         global_avatars[opt.avatar_id] = load_avatar(opt.avatar_id)
         warm_up(opt.batch_size,global_avatars[opt.avatar_id],160)
+    elif opt.model == 'ditto':
+        model = load_model()
+        global_avatars[opt.avatar_id] = load_avatar(opt.avatar_id)
 
     # Preload every other avatar under data/avatars so switching is instant
     # (first load reads ~400 files; caching it up front removes the reconnect delay).
@@ -156,6 +160,10 @@ def main():
     if os.path.isdir(avatars_dir):
         for aid in sorted(os.listdir(avatars_dir)):
             if aid in global_avatars or not os.path.isdir(os.path.join(avatars_dir, aid)):
+                continue
+            if opt.model == 'ditto' and not any(
+                    os.path.exists(os.path.join(avatars_dir, aid, f"source.{ext}"))
+                    for ext in ("mp4", "png", "jpg", "jpeg")):
                 continue
             try:
                 global_avatars[aid] = load_avatar(aid)

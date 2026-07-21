@@ -151,13 +151,27 @@ async def is_speaking(request):
 
 
 async def list_avatars(request):
-    """List available avatar IDs (directories under data/avatars)."""
+    """List avatar IDs compatible with the RUNNING model.
+
+    data/avatars holds folders for several backends (ditto needs source.*;
+    musetalk has avator_info.json + full_imgs/). Listing them all lets the UI
+    offer avatars the current model can't load, so filter to the running model."""
     import os
     base = os.path.join('data', 'avatars')
+    opt = request.app.get("opt")
+    model = getattr(opt, "model", "") if opt else ""
     items = []
     if os.path.isdir(base):
-        items = sorted(d for d in os.listdir(base)
-                       if os.path.isdir(os.path.join(base, d)))
+        for d in sorted(os.listdir(base)):
+            p = os.path.join(base, d)
+            if not os.path.isdir(p):
+                continue
+            if model == "ditto":
+                # ditto needs a source image/video; skip musetalk/others
+                if not any(os.path.exists(os.path.join(p, f"source.{e}"))
+                           for e in ("mp4", "png", "jpg", "jpeg")):
+                    continue
+            items.append(d)
     return json_ok(data={"avatars": items})
 
 
@@ -233,8 +247,7 @@ def setup_routes(app):
             warmup_async()   # preload model so the first utterance is fast
             logger.info("[ASR] ✅ Local ASR endpoint enabled at /api/asr")
         else:
-            logger.info("[ASR] funasr not installed — local ASR endpoint disabled "
-                        "(pip install funasr modelscope)")
+            logger.info("[ASR] local ASR backend unavailable — /api/asr disabled")
     except Exception as e:
         logger.warning(f"[ASR] Failed to register ASR endpoint: {e}")
 

@@ -47,7 +47,7 @@ def _load_asr_model():
     import torch
     from funasr import AutoModel
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = os.environ.get("ASR_DEVICE") or ("cuda:0" if torch.cuda.is_available() else "cpu")
     logger.info(
         f"[ASR] Loading {_ASR_MODEL_ID} on device='{device}' "
         f"(first run downloads the model from ModelScope)..."
@@ -295,5 +295,6 @@ def is_funasr_available() -> bool:
     try:
         import funasr  # noqa: F401
         return True
-    except ImportError:
+    except Exception:
+        logger.exception("[ASR] funasr import failed")
         return False

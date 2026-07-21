@@ -110,7 +110,12 @@ def parse_args():
     # Note: 'woman' contains 'man', so check 'woman' first.
     if opt.REF_FILE is None:
         if opt.tts == 'elevenlabs':
-            opt.REF_FILE = 'SEWXl8lPSO01tdGbWECX'
+            if 'woman' in opt.avatar_id:
+                opt.REF_FILE = 'SEWXl8lPSO01tdGbWECX'
+            elif 'man' in opt.avatar_id:
+                opt.REF_FILE = 'aSXZu6bgEOS8MXVRzjPi'
+            else:
+                opt.REF_FILE = 'SEWXl8lPSO01tdGbWECX'
         elif 'woman' in opt.avatar_id:
             opt.REF_FILE = 'en-US-JennyNeural'
         elif 'man' in opt.avatar_id:

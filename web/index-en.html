@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LiveTalking - Real-time Digital Human</title>
+    <title>AI Avatar</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
     <style>
@@ -79,23 +79,39 @@
         .chat-bubble { max-width: 80%; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
         .chat-user { background: #4361ee; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
         .chat-bot { background: rgba(0,0,0,0.06); color: #1e293b; margin-right: auto; border-bottom-left-radius: 4px; }
+        .app-shell { padding-top: 24px; }
+        .main-layout { display: flex; gap: 26px; align-items: center; min-height: calc(100vh - 48px); }
+        .avatar-pane { flex: 0 0 52%; max-width: 52%; }
+        .chat-pane { flex: 1; min-width: 360px; }
+        .avatar-stage { position: relative; display: flex; align-items: center; justify-content: center; }
+        .avatar-pane .glass-card { background: transparent; border: 0; box-shadow: none; margin: 0; }
+        .avatar-pane .card-header { display: none !important; }
+        .avatar-pane .card-body { padding: 0; }
+        .avatar-pane .mt-3 { margin-top: 0 !important; }
+        #video { background: #999 !important; }
+        #btnMic { margin: 56px auto 0; transform: none; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 16px 34px; border: 2px solid #f97316; border-radius: 999px; background: rgba(0,0,0,0.82); color: #fff; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        #btnMic.listening { border-color: #ef4444; background: rgba(127,29,29,0.92); }
+        .chat-pane .glass-card { height: calc(100vh - 56px); border-radius: 44px; margin: 0; overflow: hidden; }
+        .chat-pane .card-header { justify-content: space-between; padding: 28px 32px 12px; font-size: 1.35rem; }
+        .chat-pane .card-header #txtType { width: 170px; border: 0; border-bottom: 1px solid rgba(0,0,0,0.12); border-radius: 0; box-shadow: none; font-size: 1.1rem; }
+        .chat-pane .card-body { display: flex; flex-direction: column; height: calc(100% - 78px); padding: 0 24px 28px; }
+        #chatResponse { flex: 1; height: auto !important; min-height: 0 !important; border: 0 !important; background: transparent !important; }
+        .chat-composer { display: flex; align-items: center; gap: 12px; }
+        #txtMessage { height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 1.05rem; padding: 8px 16px; overflow: hidden; }
+        @media (max-width: 992px) {
+            .main-layout { flex-direction: column; }
+            .avatar-pane, .chat-pane { flex: 0 0 auto; max-width: 100%; width: 100%; }
+            .avatar-stage { min-height: auto; }
+        }
     </style>
 </head>
 <body>
 
-<nav class="navbar navbar-dark" style="background: linear-gradient(135deg, #4361ee, #3f37c9); box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
-    <div class="container-fluid px-4">
-        <span class="navbar-brand"><i class="bi bi-camera-video-fill me-2"></i>LiveTalking</span>
-        <div class="d-flex gap-2">
-            <span class="session-badge disconnected" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
-            <span class="text-white-50 small" id="sessionIdDisplay">SID: -</span>
-        </div>
-    </div>
-</nav>
-
-<div class="container-fluid mt-4 px-5">
+<div class="container-fluid app-shell px-4">
+    <span class="session-badge disconnected visually-hidden" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
+    <span class="visually-hidden" id="sessionIdDisplay">SID: -</span>
     <!-- Quick Links -->
-    <div class="row g-3 mb-2">
+    <div class="row g-3 mb-2 d-none">
         <div class="col-md-3">
             <a href="/avatar-en.html" class="quick-link" target="_blank">
                 <div class="glass-card p-3 text-center">
@@ -125,53 +141,45 @@
         </div>
     </div>
 
-    <div class="row">
+    <div class="main-layout">
         <!-- Left Column: Connection + Video -->
-        <div class="col-lg-8">
+        <div class="avatar-pane">
             <!-- 1. WebRTC Connection -->
             <div class="glass-card">
                 <div class="card-header"><i class="bi bi-broadcast"></i> WebRTC Connection</div>
                 <div class="card-body">
-                    <div class="d-flex gap-2 align-items-end mb-3">
-                        <div style="min-width:220px;">
-                            <label class="form-label">Avatar</label>
-                            <select class="form-select form-select-sm" id="offerAvatar">
-                                <option value="">(server default)</option>
-                            </select>
-                        </div>
-                        <button class="btn-primary-custom" id="btnStart" onclick="start()"><i class="bi bi-play-fill"></i> Connect</button>
-                        <button class="btn-danger-custom" id="btnStop" onclick="stop()" style="display:none;"><i class="bi bi-stop-fill"></i> Disconnect</button>
-                    </div>
                     <div id="offerError" class="alert alert-danger mt-3" role="alert" style="display:none;"></div>
                     <div class="mt-3">
-                        <video id="video" autoplay playsinline muted style="width:100%; max-height:78vh; border-radius:12px; background:#000;"></video>
+                        <video id="video" autoplay playsinline muted style="width:100%; aspect-ratio:16/9; height:auto; max-height:calc(100vh - 48px); display:block; margin:0 auto; object-fit:contain; border-radius:0; background:#000;"></video>
                         <audio id="audio" autoplay></audio>
                     </div>
                 </div>
             </div>
+            <div style="text-align:center; margin-top:12px;">
+                <select id="avatarSelect" onchange="switchAvatar()" class="form-select form-select-sm" style="display:inline-block; width:auto; min-width:200px;" title="Switch avatar (no restart)"></select>
+            </div>
+            <button class="btn-outline-custom btn-sm" id="btnMic" onclick="toggleMic()" title="Voice input"><i class="bi bi-mic"></i><span>Press to Talk</span></button>
         </div>
 
         <!-- Right Column: Drivers + Actions -->
-        <div class="col-lg-4">
+        <div class="chat-pane">
             <!-- 2. Text Driver -->
             <div class="glass-card">
-                <div class="card-header"><i class="bi bi-chat-text-fill"></i> Input</div>
+                <div class="card-header">
+                    <span><i class="bi bi-chat-text-fill"></i> Chat</span>
+                    <select class="form-select form-select-sm" id="txtType">
+                        <option value="chat">Chat</option>
+                        <option value="echo">Echo</option>
+                    </select>
+                </div>
                 <div class="card-body">
-                    <div class="mb-2">
-                        <label class="form-label">Text <span class="param-hint">(type: echo/chat)</span></label>
-                        <textarea class="form-control form-control-sm" id="txtMessage" rows="3" placeholder="Enter a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
-                    </div>
-                    <div class="d-flex gap-2 align-items-end mb-2">
-                        <select class="form-select form-select-sm" style="width:120px;" id="txtType">
-                            <option value="chat">Chat</option>
-                            <option value="echo">Echo</option>
-                        </select>
-                        <button class="btn-outline-custom btn-sm ms-auto" id="btnMic" onclick="toggleMic()" title="Voice input"><i class="bi bi-mic"></i></button>
+                    <div id="chatResponse" style="height:calc(100vh - 420px); min-height:400px; overflow-y:auto; padding:12px; background:rgba(255,255,255,0.6); border:1px solid rgba(0,0,0,0.08); border-radius:8px; display:flex; flex-direction:column;"></div>
+                    <div class="chat-composer">
+                        <textarea class="form-control form-control-sm" id="txtMessage" rows="1" placeholder="Enter a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
                         <button class="btn-primary-custom btn-sm" onclick="sendText()"><i class="bi bi-send"></i> Send</button>
-                        <button class="btn-outline-custom btn-sm" onclick="interrupt()"><i class="bi bi-stop-circle"></i> Interrupt</button>
+                        <button class="btn-danger-custom btn-sm" onclick="interrupt()" title="Stop the avatar talking"><i class="bi bi-stop-circle"></i> Stop</button>
                         <button class="btn-outline-custom btn-sm" onclick="document.getElementById('chatResponse').innerHTML=''" title="Clear chat"><i class="bi bi-trash"></i></button>
                     </div>
-                    <div id="chatResponse" style="height:calc(100vh - 420px); min-height:400px; overflow-y:auto; padding:12px; background:rgba(255,255,255,0.6); border:1px solid rgba(0,0,0,0.08); border-radius:8px; display:flex; flex-direction:column;"></div>
                 </div>
             </div>
 
@@ -186,10 +194,10 @@ let sessionid = null;
 function updateStatus(connected) {
     const badge = document.getElementById('statusBadge');
     if (connected) {
-        badge.className = 'session-badge connected';
+        badge.className = 'session-badge connected visually-hidden';
         badge.innerHTML = '<span class="status-dot on"></span>Connected';
     } else {
-        badge.className = 'session-badge disconnected';
+        badge.className = 'session-badge disconnected visually-hidden';
         badge.innerHTML = '<span class="status-dot off"></span>Disconnected';
     }
 }
@@ -209,42 +217,61 @@ function showError(msg) {
 // --- Voice input (mic → /api/asr → textarea → send) ---
 let micWs = null, micCtx = null, micStream = null, micNode = null, micOn = false;
 
+// The ASR server assumes 16 kHz mono. Browsers usually capture at 44.1/48 kHz;
+// sending that as-if-16k garbles recognition (wrong words, wrong language). Downsample.
+function down16k(buf, inRate) {
+    if (inRate === 16000) return buf;
+    const ratio = inRate / 16000;
+    const outLen = Math.floor(buf.length / ratio);
+    const out = new Float32Array(outLen);
+    for (let i = 0; i < outLen; i++) {
+        const start = Math.floor(i * ratio), end = Math.min(Math.floor((i + 1) * ratio), buf.length);
+        let s = 0, n = 0;
+        for (let j = start; j < end; j++) { s += buf[j]; n++; }
+        out[i] = n ? s / n : (buf[start] || 0);
+    }
+    return out;
+}
+
 async function toggleMic() {
+    unlockOutputAudio();   // this click is a user gesture — unlock avatar audio playback now
     if (micOn) { stopMic(true); return; }
     if (!sessionid) return alert('Please connect WebRTC first');
+    interrupt();   // stop the avatar so it listens instead of talking over you (keeps its voice out of the mic)
     try {
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) { return alert('Microphone permission denied'); }
+
+    micOn = true;
+    const btn = document.getElementById('btnMic');
+    btn.innerHTML = '<i class="bi bi-mic-fill"></i><span>Listening... Press to Stop</span>';
+    btn.classList.add('listening');
+    document.getElementById('txtMessage').placeholder = 'Listening... click mic again to finish';
 
     const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
     micWs = new WebSocket(proto + location.host + '/api/asr');
     micWs.onopen = () => {
         micWs.send(JSON.stringify({ chunk_size: [5, 10, 5], wav_name: 'h5', is_speaking: true, mode: '2pass', itn: false }));
-        micCtx = new AudioContext({ sampleRate: 16000 });
+        micCtx = new AudioContext();   // native rate; we resample to 16k ourselves (forcing 16k is unreliable across browsers)
+        const inRate = micCtx.sampleRate;
         const src = micCtx.createMediaStreamSource(micStream);
         micNode = micCtx.createScriptProcessor(4096, 1, 1);
         micNode.onaudioprocess = (e) => {
             if (!micWs || micWs.readyState !== 1 || !micOn) return;
-            const f32 = e.inputBuffer.getChannelData(0);
-            const i16 = new Int16Array(f32.length);
-            for (let i = 0; i < f32.length; i++) i16[i] = Math.max(-32768, Math.min(32767, f32[i] * 32768));
+            const out = down16k(e.inputBuffer.getChannelData(0), inRate);   // guarantee true 16 kHz to the ASR server
+            const i16 = new Int16Array(out.length);
+            for (let i = 0; i < out.length; i++) i16[i] = Math.max(-32768, Math.min(32767, out[i] * 32768));
             micWs.send(i16.buffer);
         };
         src.connect(micNode);
         micNode.connect(micCtx.destination);
-        micOn = true;
-        const btn = document.getElementById('btnMic');
-        btn.innerHTML = '<i class="bi bi-mic-fill"></i>';
-        btn.style.color = '#ef4444';
-        document.getElementById('txtMessage').placeholder = 'Listening... click mic again to finish';
     };
     micWs.onmessage = (e) => {
         const msg = JSON.parse(e.data);
         if (msg.is_final) {
-            if (micWs) { micWs.close(); micWs = null; }
-            document.getElementById('txtMessage').placeholder = 'Enter a message...';
             // strip SenseVoice emotion emojis and symbols
             const clean = (msg.text || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
+            stopMic(false);
             if (clean) {
                 document.getElementById('txtMessage').value = clean;
                 sendText();
@@ -269,8 +296,8 @@ function stopMic(sendStop) {
     }
     micOn = false;
     const btn = document.getElementById('btnMic');
-    btn.innerHTML = '<i class="bi bi-mic"></i>';
-    btn.style.color = '';
+    btn.innerHTML = '<i class="bi bi-mic"></i><span>Press to Talk</span>';
+    btn.classList.remove('listening');
 }
 
 // --- WebRTC ---
@@ -289,10 +316,13 @@ function negotiate() {
         const offer = pc.localDescription;
         // Per-avatar voice mapping (ElevenLabs voice IDs; falls back to launch --REF_FILE)
         const AVATAR_VOICE = {
+            'ditto_man': 'aSXZu6bgEOS8MXVRzjPi',
+            'ditto_woman': 'SEWXl8lPSO01tdGbWECX',
             'avatar_man': 'aSXZu6bgEOS8MXVRzjPi',
             'avatar_woman2': 'SEWXl8lPSO01tdGbWECX',
         };
-        const chosenAvatar = document.getElementById('offerAvatar').value || undefined;
+        const sel = document.getElementById('avatarSelect');
+        const chosenAvatar = (sel && sel.value) || undefined;   // per-session avatar from the dropdown
         const body = {
             sdp: offer.sdp,
             type: offer.type,
@@ -317,8 +347,8 @@ function negotiate() {
         if (pc) { pc.close(); pc = null; }
         updateStatus(false);
         setSessionId(null);
-        document.getElementById('btnStart').style.display = 'inline-block';
-        document.getElementById('btnStop').style.display = 'none';
+        // always auto-retry (kiosk mode — no connect/disconnect UI)
+        setTimeout(() => { if (!pc || pc.connectionState !== 'connected') start(); }, 2000);
     });
 }
 
@@ -339,39 +369,44 @@ async function start() {
     });
     pc.addEventListener('connectionstatechange', () => {
         if (pc.connectionState === 'connected') updateStatus(true);
-        else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') { updateStatus(false); setSessionId(null); }
+        else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
+            updateStatus(false); setSessionId(null);
+            // always auto-reconnect (kiosk mode — no connect/disconnect UI)
+            setTimeout(() => { if (!pc || pc.connectionState !== 'connected') start(); }, 1500);
+        }
     });
     negotiate();
-    document.getElementById('btnStart').style.display = 'none';
-    document.getElementById('btnStop').style.display = 'inline-block';
-}
-
-function stop() {
-    if (pc) { pc.close(); pc = null; }
-    updateStatus(false);
-    setSessionId(null);
-    document.getElementById('btnStart').style.display = 'inline-block';
-    document.getElementById('btnStop').style.display = 'none';
-    document.getElementById('video').srcObject = null;
-    document.getElementById('audio').srcObject = null;
 }
 
 // --- Text / Chat ---
 const CHAT_API_URL = 'https://voncierge-lang-agent.hipster-virtual.com/chat/sse';
 
+function unlockOutputAudio() {
+    const audio = document.getElementById('audio');
+    if (audio) audio.play().catch(() => {});
+}
+
 // Send one sentence to the avatar to speak (echo = speak the given text verbatim)
-function speak(text, doInterrupt) {
-    return fetch('/human', {
+async function speak(text, doInterrupt) {
+    unlockOutputAudio();
+    const resp = await fetch('/human', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text, type: 'echo', interrupt: doInterrupt, sessionid: String(sessionid) }),
     });
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok || data.code) throw new Error(data.msg || 'avatar speak failed');
 }
 
 let speakQueue = Promise.resolve();
+let speakGen = 0;   // bumped by interrupt() to cancel sentences queued but not yet sent
 
 function queueSpeak(text, doInterrupt) {
-    speakQueue = speakQueue.catch(() => {}).then(() => speak(text, doInterrupt));
+    const gen = speakGen;
+    speakQueue = speakQueue.catch(() => {}).then(() => {
+        if (gen !== speakGen) return;   // an interrupt happened → drop this stale queued sentence
+        return speak(text, doInterrupt);
+    });
     return speakQueue;
 }
 
@@ -394,6 +429,7 @@ function addBubble(who, text) {
 }
 
 async function sendText() {
+    unlockOutputAudio();
     const el = document.getElementById('txtMessage');
     const out = document.getElementById('chatResponse');
     const text = el.value.trim();
@@ -408,10 +444,26 @@ async function sendText() {
         return;
     }
 
-    // chat: stream the API response as text and speak each sentence as it completes
+    // chat: stream text on screen AND speak each sentence the moment it completes,
+    // so the avatar starts on sentence 1 instead of waiting for the whole reply.
     interrupt();                           // stop any current speech
     const botBubble = addBubble('bot', '');
-    let buffer = '';
+    let reply = '', spoken = 0, first = true;
+    const flushSentences = (force) => {
+        for (;;) {
+            const rest = reply.slice(spoken);
+            const end = firstSentenceEnd(rest);
+            if (end < 0) break;
+            const s = rest.slice(0, end + 1).replace(/[*#`]/g, '').trim();
+            spoken += end + 1;
+            if (s) { queueSpeak(s, first); first = false; }   // 1st sentence interrupts; rest queue
+        }
+        if (force) {
+            const tail = reply.slice(spoken).replace(/[*#`]/g, '').trim();
+            if (tail) { queueSpeak(tail, first); first = false; }
+            spoken = reply.length;
+        }
+    };
     try {
         const resp = await fetch(CHAT_API_URL, {
             method: 'POST',
@@ -434,19 +486,13 @@ async function sendText() {
                 if (chunk) {
                     botBubble.textContent += chunk;   // stream text out
                     out.scrollTop = out.scrollHeight;
-                    buffer += chunk;
-                    let idx;
-                    while ((idx = firstSentenceEnd(buffer)) >= 0) {
-                        const seg = buffer.slice(0, idx + 1).replace(/[*#`]/g, '').trim();
-                        buffer = buffer.slice(idx + 1);
-                        if (seg) await queueSpeak(seg, false);   // speak sentence-by-sentence
-                    }
+                    reply += chunk;
+                    flushSentences(false);            // speak completed sentences immediately
                 }
                 if (obj.final_token) { done = true; break; }
             }
         }
-        const tail = buffer.replace(/[*#`]/g, '').trim();
-        if (tail) await queueSpeak(tail, false);
+        flushSentences(true);                         // speak the final partial sentence
     } catch (e) {
         botBubble.textContent += '\n[error: ' + (e.message || e) + ']';
     }
@@ -454,6 +500,7 @@ async function sendText() {
 
 // --- Interrupt ---
 function interrupt() {
+    speakGen++;                            // invalidate every sentence still queued in the frontend
     speakQueue = Promise.resolve();
     if (!sessionid) return;
     fetch('/interrupt_talk', {
@@ -473,28 +520,41 @@ function checkSpeaking() {
     }).then(r => r.json()).then(d => alert('Speaking: ' + JSON.stringify(d.data)));
 }
 
-// --- Avatar dropdown ---
+// Populate the avatar switcher from the backend, marking the server default.
 async function loadAvatarList() {
-    const sel = document.getElementById('offerAvatar');
+    const sel = document.getElementById('avatarSelect');
+    if (!sel) return;
     try {
-        const r = await fetch('/api/avatars');
-        const j = await r.json();
+        const j = await fetch('/api/avatars').then(r => r.json());
         const avatars = (j.data && j.data.avatars) || [];
-        let serverDefault = '';
+        let def = '';
         try {
             const c = await fetch('/api/admin/config').then(r => r.json());
-            serverDefault = (c.data && c.data.config && c.data.config.avatar_id) || '';
+            def = (c.data && c.data.config && c.data.config.avatar_id) || '';
         } catch (e) { /* config endpoint optional */ }
+        sel.innerHTML = '';
         avatars.forEach(id => {
             const o = document.createElement('option');
             o.value = id;
-            o.textContent = id + (id === serverDefault ? ' (default)' : '');
-            if (id === serverDefault) o.selected = true;
+            o.textContent = id + (id === def ? ' (default)' : '');
+            if (id === def) o.selected = true;
             sel.appendChild(o);
         });
-    } catch (e) { console.warn('failed to load avatar list', e); }
+    } catch (e) { console.warn('avatar list failed', e); }
 }
-loadAvatarList();
+
+// Switch avatar live — no backend restart. Reconnect with the chosen avatar;
+// build_avatar_session loads it on the backend for this session (+ its voice).
+async function switchAvatar() {
+    interrupt();
+    if (pc) { pc.close(); pc = null; }
+    setSessionId(null);
+    document.getElementById('video').srcObject = null;
+    await start();   // start()/negotiate() reads #avatarSelect
+}
+
+// Load the switcher, then auto-connect to the default avatar.
+loadAvatarList().then(() => start());
 
 </script>
 </body>
