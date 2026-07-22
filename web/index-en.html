@@ -202,6 +202,8 @@ let pc = null;
 let sessionid = null;
 let remoteStream = null;
 let outputAudioUnlocked = false;
+let connecting = false;
+let reconnectTimer = null;
 
 function updateStatus(connected) {
     const badge = document.getElementById('statusBadge');
@@ -313,19 +315,19 @@ function stopMic(sendStop) {
 }
 
 // --- WebRTC ---
-function negotiate() {
-    pc.addTransceiver('video', { direction: 'recvonly' });
-    pc.addTransceiver('audio', { direction: 'recvonly' });
-    return pc.createOffer().then(offer => pc.setLocalDescription(offer)).then(() => {
+function negotiate(peer) {
+    peer.addTransceiver('video', { direction: 'recvonly' });
+    peer.addTransceiver('audio', { direction: 'recvonly' });
+    return peer.createOffer().then(offer => peer.setLocalDescription(offer)).then(() => {
         return new Promise(resolve => {
-            if (pc.iceGatheringState === 'complete') resolve();
+            if (peer.iceGatheringState === 'complete') resolve();
             else {
-                const check = () => { if (pc.iceGatheringState === 'complete') { pc.removeEventListener('icegatheringstatechange', check); resolve(); } };
-                pc.addEventListener('icegatheringstatechange', check);
+                const check = () => { if (peer.iceGatheringState === 'complete') { peer.removeEventListener('icegatheringstatechange', check); resolve(); } };
+                peer.addEventListener('icegatheringstatechange', check);
             }
         });
     }).then(() => {
-        const offer = pc.localDescription;
+        const offer = peer.localDescription;
         // Per-avatar voice mapping (ElevenLabs voice IDs; falls back to launch --REF_FILE)
         const AVATAR_VOICE = {
             'ditto_man': 'aSXZu6bgEOS8MXVRzjPi',
@@ -351,20 +353,34 @@ function negotiate() {
             throw new Error('Server returned no SDP');
         }
         if (answer.sessionid) setSessionId(answer.sessionid);
-        return pc.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answer.sdp }));
+        return peer.setRemoteDescription(new RTCSessionDescription({ type: 'answer', sdp: answer.sdp }));
     }).catch(e => {
+        if (pc !== peer) return;
         const msg = e.message || String(e);
         showError(msg);
         // Reset connection state on error
-        if (pc) { pc.close(); pc = null; }
+        pc = null;
+        connecting = false;
+        peer.close();
         updateStatus(false);
         setSessionId(null);
         // always auto-retry (kiosk mode — no connect/disconnect UI)
-        setTimeout(() => { if (!pc || pc.connectionState !== 'connected') start(); }, 2000);
+        scheduleReconnect();
     });
 }
 
+function scheduleReconnect(delay = 2000) {
+    if (reconnectTimer) return;
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        if (!pc || ['failed', 'closed', 'disconnected'].includes(pc.connectionState)) start();
+    }, delay);
+}
+
 async function start() {
+    if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;
+    if (pc) { const old = pc; pc = null; old.close(); }
+    connecting = true;
     document.getElementById('offerError').style.display = 'none';
     // Fetch ICE servers from backend (Cloudflare TURN, auto-refreshed, never expires)
     let iceServers = [{ urls: 'stun:stun.cloudflare.com:3478' }];
@@ -374,27 +390,39 @@ async function start() {
         if (j.iceServers && j.iceServers.length) iceServers = j.iceServers;
     } catch (e) { console.warn('iceservers fetch failed, using STUN only', e); }
     const config = { sdpSemantics: 'unified-plan', iceServers };
-    pc = new RTCPeerConnection(config);
+    const peer = new RTCPeerConnection(config);
+    pc = peer;
     const stream = new MediaStream();
-    remoteStream = stream;
     const video = document.getElementById('video');
-    video.srcObject = stream;
-    video.muted = !outputAudioUnlocked;
-    pc.addEventListener('track', evt => {
+    peer.addEventListener('track', evt => {
+        if (pc !== peer) return;
         if (!stream.getTracks().some(track => track.id === evt.track.id)) {
             stream.addTrack(evt.track);
         }
+        remoteStream = stream;
+        video.srcObject = stream;
+        video.muted = !outputAudioUnlocked;
         video.play().catch(() => {});
     });
-    pc.addEventListener('connectionstatechange', () => {
-        if (pc.connectionState === 'connected') updateStatus(true);
-        else if (pc.connectionState === 'disconnected' || pc.connectionState === 'failed') {
-            updateStatus(false); setSessionId(null);
+    peer.addEventListener('connectionstatechange', () => {
+        if (pc !== peer) return;
+        if (peer.connectionState === 'connected') {
+            connecting = false;
+            if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+            updateStatus(true);
+        } else if (peer.connectionState === 'disconnected') {
+            updateStatus(false);
+            scheduleReconnect(5000);
+        } else if (peer.connectionState === 'failed' || peer.connectionState === 'closed') {
+            connecting = false;
+            pc = null;
+            updateStatus(false);
+            setSessionId(null);
             // always auto-reconnect (kiosk mode — no connect/disconnect UI)
-            setTimeout(() => { if (!pc || pc.connectionState !== 'connected') start(); }, 1500);
+            scheduleReconnect();
         }
     });
-    negotiate();
+    negotiate(peer);
 }
 
 // --- Text / Chat ---
@@ -658,6 +686,8 @@ async function loadAvatarList() {
 async function switchAvatar() {
     interrupt();
     if (pc) { pc.close(); pc = null; }
+    connecting = false;
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     setSessionId(null);
     document.getElementById('video').srcObject = null;
     remoteStream = null;
