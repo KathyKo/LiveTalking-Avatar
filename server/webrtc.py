@@ -241,8 +241,14 @@ class HumanPlayer:
         if not self.__started and self.__thread is not None:
             self.__log_debug("Stopping worker thread")
             self.__thread_quit.set()
-            self.__thread.join()
+            thread = self.__thread
             self.__thread = None
+            # Ditto shutdown can take seconds; never block aiohttp/WebRTC cleanup.
+            threading.Thread(
+                name="media-player-reaper",
+                target=thread.join,
+                daemon=True,
+            ).start()
 
         if not self.__started and self.__container is not None:
             #self.__container.close()
