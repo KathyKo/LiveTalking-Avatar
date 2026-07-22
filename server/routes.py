@@ -150,6 +150,17 @@ async def is_speaking(request):
     return json_ok(data=avatar_session.is_speaking())
 
 
+async def avatar_timing(request):
+    params = await request.json()
+    avatar_session = get_session(request, params.get('sessionid', ''))
+    if avatar_session is None:
+        return json_error("session not found")
+    return json_ok(data={
+        "tts_seq": getattr(avatar_session, "_tts_start_seq", 0),
+        "avatar_seq": getattr(avatar_session, "_avatar_start_seq", 0),
+    })
+
+
 async def list_avatars(request):
     """List avatar IDs compatible with the RUNNING model.
 
@@ -234,6 +245,7 @@ def setup_routes(app):
     app.router.add_post("/record", record)
     app.router.add_post("/interrupt_talk", interrupt_talk)
     app.router.add_post("/is_speaking", is_speaking)
+    app.router.add_post("/avatar_timing", avatar_timing)
     app.router.add_get("/api/avatars", list_avatars)
     app.router.add_get("/api/admin/config", admin_config)
     app.router.add_get("/api/admin/sessions", admin_sessions)

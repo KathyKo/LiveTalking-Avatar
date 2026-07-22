@@ -207,6 +207,8 @@ class DittoReal(BaseAvatar):
         self._utt_t0 = 0.0             # [timing] utterance audio-in time
         self._utt_gen_pending = False  # log audio-in → first frame GENERATED
         self._utt_show_pending = False # log audio-in → first frame SHOWN (speak start)
+        self._tts_start_seq = 0
+        self._avatar_start_seq = 0
 
         # ── diagnostics (DITTO_DEBUG) — prove writer frames ≠ source frames ──
         self._dbg = bool(os.environ.get("DITTO_DEBUG"))
@@ -261,6 +263,7 @@ class DittoReal(BaseAvatar):
         # status='start' → unmute.
         if datainfo.get('status') == 'start':
             self._muted = False
+            self._tts_start_seq += 1
             self._utt_t0 = time.perf_counter()   # [timing] this utterance's audio arrived
             self._utt_gen_pending = True
             self._utt_show_pending = True
@@ -318,6 +321,8 @@ class DittoReal(BaseAvatar):
         self._feed_epoch += 1                      # abort any backpressured put_audio_frame
         self._muted = True                         # drop the interrupted utterance's tail until next 'start'
         self.speaking = False
+        self._tts_start_seq = 0
+        self._avatar_start_seq = 0
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
@@ -451,6 +456,7 @@ class DittoReal(BaseAvatar):
                 self._prof_frames_used += 1
                 if self._utt_show_pending:
                     self._utt_show_pending = False
+                    self._avatar_start_seq += 1
                     logger.info("[ditto-timing] SPEAK START (audio+video out to WebRTC): %.2fs after audio in",
                                 time.perf_counter() - self._utt_t0)
                 # confirm what's shown DURING speech is a writer frame (not idle):

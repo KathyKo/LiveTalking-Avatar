@@ -99,7 +99,7 @@
         .chat-pane .card-body { display: flex; flex-direction: column; height: calc(100% - 78px); padding: 0 24px 28px; }
         #chatResponse { flex: 1; height: auto !important; min-height: 0 !important; border: 0 !important; background: transparent !important; }
         .chat-composer { display: flex; align-items: center; gap: 12px; }
-        .latency-row { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 8px 0; color: #64748b; font-size: 0.78rem; }
+        .latency-row { display: flex; flex-wrap: wrap; gap: 5px 14px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.08); color: #64748b; font-size: 0.72rem; }
         .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
         .chat-bot p:last-child { margin-bottom: 0; }
         .chat-media { width: 100%; max-height: 320px; margin-top: 8px; border-radius: 6px; background: #000; }
@@ -184,11 +184,6 @@
                         <button class="btn-primary-custom btn-sm" onclick="sendText()"><i class="bi bi-send"></i> Send</button>
                         <button class="btn-danger-custom btn-sm" onclick="interrupt()" title="Stop the avatar talking"><i class="bi bi-stop-circle"></i> Stop</button>
                         <button class="btn-outline-custom btn-sm" onclick="document.getElementById('chatResponse').innerHTML=''" title="Clear chat"><i class="bi bi-trash"></i></button>
-                    </div>
-                    <div class="latency-row" aria-live="polite">
-                        <span>First response: <strong id="latencyFirst">--</strong></span>
-                        <span>Complete response: <strong id="latencyComplete">--</strong></span>
-                        <span>Avatar started: <strong id="latencyAvatar">--</strong></span>
                     </div>
                 </div>
             </div>
@@ -480,17 +475,25 @@ function addBubble(who, text) {
     const out = document.getElementById('chatResponse');
     const div = document.createElement('div');
     div.className = 'chat-bubble ' + (who === 'user' ? 'chat-user' : 'chat-bot');
-    div.textContent = text;
+    if (who === 'user') {
+        div.textContent = text;
+    } else {
+        const content = document.createElement('div');
+        content.className = 'bubble-content';
+        content.textContent = text;
+        div.appendChild(content);
+    }
     out.appendChild(div);
     out.scrollTop = out.scrollHeight;
     return div;
 }
 
-const VIDEO_URL_RE = /`?(https?:\/\/[^\s`<>"']+?\.mp4(?:\?[^\s`<>"']*)?)`?/gi;
+const VIDEO_URL_RE = /`?(https?:\/\/[^\s`<>"']+?\.(?:mp4|mov|webm)(?:\?[^\s`<>"']*)?)`?/gi;
 
 function renderBotBubble(el, text) {
+    const content = el.querySelector('.bubble-content') || el;
     if (!window.marked || !window.DOMPurify) {
-        el.textContent = text;
+        content.textContent = text;
         return;
     }
     const videos = [];
@@ -498,7 +501,7 @@ function renderBotBubble(el, text) {
         videos.push(url);
         return '';
     });
-    el.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+    content.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
     [...new Set(videos)].forEach(url => {
         const video = document.createElement('video');
         video.className = 'chat-media';
@@ -506,7 +509,7 @@ function renderBotBubble(el, text) {
         video.playsInline = true;
         video.preload = 'metadata';
         video.src = url;
-        el.appendChild(video);
+        content.appendChild(video);
     });
 }
 
@@ -521,36 +524,53 @@ function toSpeechText(text) {
         .trim();
 }
 
-function setLatency(id, startedAt) {
-    const seconds = (performance.now() - startedAt) / 1000;
-    const value = seconds.toFixed(2) + 's';
-    document.getElementById(id).textContent = value;
-    console.info('[latency]', id, value);
+function addLatencyRow(bubble) {
+    const row = document.createElement('div');
+    row.className = 'latency-row';
+    row.setAttribute('aria-live', 'polite');
+    row.innerHTML = '<span>First character: <strong>--</strong></span>' +
+        '<span>First TTS: <strong>--</strong></span>' +
+        '<span>Complete response: <strong>--</strong></span>' +
+        '<span>Avatar started: <strong>--</strong></span>';
+    bubble.appendChild(row);
+    const values = row.querySelectorAll('strong');
+    return { firstChar: values[0], firstTts: values[1], complete: values[2], avatar: values[3] };
 }
 
-function resetLatencies() {
-    ['latencyFirst', 'latencyComplete', 'latencyAvatar'].forEach(id => {
-        document.getElementById(id).textContent = '--';
+function setLatency(el, startedAt, name) {
+    const seconds = (performance.now() - startedAt) / 1000;
+    const value = seconds.toFixed(2) + 's';
+    el.textContent = value;
+    console.info('[latency]', name, value);
+}
+
+async function getAvatarTiming() {
+    const resp = await fetch('/avatar_timing', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionid: String(sessionid) }),
     });
+    const data = await resp.json();
+    return data.code === 0 ? data.data : { tts_seq: 0, avatar_seq: 0 };
 }
 
 let latencyTurn = 0;
-async function watchAvatarStarted(startedAt, turn) {
-    const deadline = performance.now() + 30000;
-    while (turn === latencyTurn && performance.now() < deadline) {
+async function watchAvatarTiming(startedAt, turn, metrics, baseline) {
+    const deadline = performance.now() + 60000;
+    let gotTts = false, gotAvatar = false;
+    while (turn === latencyTurn && performance.now() < deadline && (!gotTts || !gotAvatar)) {
         try {
-            const resp = await fetch('/is_speaking', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionid: String(sessionid) }),
-            });
-            const data = await resp.json();
-            if (data.code === 0 && data.data === true) {
-                setLatency('latencyAvatar', startedAt);
-                return;
+            const timing = await getAvatarTiming();
+            if (!gotTts && timing.tts_seq > baseline.tts_seq) {
+                gotTts = true;
+                setLatency(metrics.firstTts, startedAt, 'firstTts');
+            }
+            if (!gotAvatar && timing.avatar_seq > baseline.avatar_seq) {
+                gotAvatar = true;
+                setLatency(metrics.avatar, startedAt, 'avatarStarted');
             }
         } catch (e) { /* retry until timeout */ }
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, 25));
     }
 }
 
@@ -563,24 +583,28 @@ async function sendText() {
     if (!text || !sessionid) return alert('Please connect WebRTC first');
     const startedAt = performance.now();
     const turn = ++latencyTurn;
-    resetLatencies();
     el.value = '';
 
     addBubble('user', text);
 
     if (mode === 'echo') {
+        const botBubble = addBubble('bot', 'Echo');
+        const metrics = addLatencyRow(botBubble);
+        metrics.firstChar.textContent = 'n/a';
+        metrics.complete.textContent = 'n/a';
         await interrupt();
-        watchAvatarStarted(startedAt, turn);
+        watchAvatarTiming(startedAt, turn, metrics, { tts_seq: 0, avatar_seq: 0 });
         await queueSpeak(text, false);     // just speak what was typed
         return;
     }
 
     // chat: stream text on screen AND speak each sentence the moment it completes,
     // so the avatar starts on sentence 1 instead of waiting for the whole reply.
-    await interrupt();                     // stop any current speech
-    watchAvatarStarted(startedAt, turn);
     const botBubble = addBubble('bot', '');
-    let reply = '', spoken = 0, gotFirstResponse = false;
+    const metrics = addLatencyRow(botBubble);
+    await interrupt();                     // stop any current speech
+    watchAvatarTiming(startedAt, turn, metrics, { tts_seq: 0, avatar_seq: 0 });
+    let reply = '', spoken = 0, gotFirstCharacter = false;
     const flushSentences = (force) => {
         for (;;) {
             const rest = reply.slice(spoken);
@@ -616,9 +640,9 @@ async function sendText() {
                 let obj; try { obj = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
                 const chunk = obj.data || '';
                 if (chunk) {
-                    if (!gotFirstResponse) {
-                        gotFirstResponse = true;
-                        setLatency('latencyFirst', startedAt);
+                    if (!gotFirstCharacter) {
+                        gotFirstCharacter = true;
+                        setLatency(metrics.firstChar, startedAt, 'firstCharacter');
                     }
                     reply += chunk;
                     renderBotBubble(botBubble, reply);
@@ -629,7 +653,7 @@ async function sendText() {
             }
         }
         flushSentences(true);                         // speak the final partial sentence
-        setLatency('latencyComplete', startedAt);
+        setLatency(metrics.complete, startedAt, 'completeResponse');
     } catch (e) {
         reply += '\n[error: ' + (e.message || e) + ']';
         renderBotBubble(botBubble, reply);
