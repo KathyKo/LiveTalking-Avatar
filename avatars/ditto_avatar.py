@@ -204,6 +204,9 @@ class DittoReal(BaseAvatar):
         self._feed_cap = int(os.environ.get("DITTO_FEED_CAP", "40"))
         self._feed_epoch = 0   # bumped on flush_talk to abort in-flight feeding
         self._muted = False    # set on flush; drop audio until the next utterance ('start')
+        self._utt_t0 = 0.0             # [timing] utterance audio-in time
+        self._utt_gen_pending = False  # log audio-in → first frame GENERATED
+        self._utt_show_pending = False # log audio-in → first frame SHOWN (speak start)
 
         # ── diagnostics (DITTO_DEBUG) — prove writer frames ≠ source frames ──
         self._dbg = bool(os.environ.get("DITTO_DEBUG"))
@@ -258,6 +261,9 @@ class DittoReal(BaseAvatar):
         # status='start' → unmute.
         if datainfo.get('status') == 'start':
             self._muted = False
+            self._utt_t0 = time.perf_counter()   # [timing] this utterance's audio arrived
+            self._utt_gen_pending = True
+            self._utt_show_pending = True
         if self._muted:
             return
         # Backpressure: block the TTS feed while the SDK is >_feed_cap frames ahead,
@@ -332,6 +338,10 @@ class DittoReal(BaseAvatar):
             self._prof_log()
             return
         self._prof_frames_out += 1
+        if self._utt_gen_pending:
+            self._utt_gen_pending = False
+            logger.info("[ditto-timing] VIDEO first frame GENERATED: %.2fs after audio in (window + diffusion)",
+                        time.perf_counter() - self._utt_t0)
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         if self._dbg and self._dbg_writer_saved < self._dbg_n:
             self._dbg_dump_writer(frame_bgr)
@@ -437,6 +447,10 @@ class DittoReal(BaseAvatar):
                 in_speech = True
                 last_ditto_t = now
                 self._prof_frames_used += 1
+                if self._utt_show_pending:
+                    self._utt_show_pending = False
+                    logger.info("[ditto-timing] SPEAK START (audio+video out to WebRTC): %.2fs after audio in",
+                                time.perf_counter() - self._utt_t0)
                 # confirm what's shown DURING speech is a writer frame (not idle):
                 # these should visually equal frame_*.jpg from _dbg_dump_writer.
                 if self._dbg and dbg_pump_saved < self._dbg_n:

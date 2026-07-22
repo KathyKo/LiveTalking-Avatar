@@ -21,5 +21,21 @@ models/
 dist
 .env
 
+# Local/RunPod environments and downloaded model files
+.tmp/
+.cache/
+ditto310/
+ditto_pydeps/
+ditto-talkinghead/
+checkpoints/
+*.engine
+*.onnx
+*.pth
+*.pt
+*.ckpt
+*.tar
+*.tar.gz
+!.env.example
+
 .claude/
 .agents/
