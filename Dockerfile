@@ -47,9 +47,11 @@ print("TensorRT", trt.__version__)
 print("ONNX Runtime", ort.__version__, ort.get_available_providers())
 PY
 
-EXPOSE 8010
+EXPOSE 8010 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10m --retries=3 \
-    CMD curl -fsS http://127.0.0.1:${LISTEN_PORT:-8010}/index-en.html >/dev/null || exit 1
+    CMD curl -fsS http://127.0.0.1:${LISTEN_PORT:-8010}/index-en.html >/dev/null \
+        || curl -fsS http://127.0.0.1:8888/ >/dev/null \
+        || exit 1
 
 ENTRYPOINT ["/opt/livetalking/docker/start.sh"]

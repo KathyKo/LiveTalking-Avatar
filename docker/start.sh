@@ -26,6 +26,17 @@ fi
 mkdir -p "$DATA_ROOT/avatars" "$MODEL_ROOT" "$CACHE_ROOT/modelscope" "$CACHE_ROOT/huggingface"
 ln -sfn "$DATA_ROOT" "$APP_ROOT/data"
 
+JUPYTER_TOKEN=${JUPYTER_TOKEN:-$(python -c 'import secrets; print(secrets.token_urlsafe(24))')}
+echo "JupyterLab: http://<pod-host>:8888/?token=$JUPYTER_TOKEN"
+jupyter lab \
+    --allow-root \
+    --no-browser \
+    --ip=0.0.0.0 \
+    --port=8888 \
+    --ServerApp.root_dir="$WORKSPACE_ROOT" \
+    --ServerApp.allow_remote_access=True \
+    --IdentityProvider.token="$JUPYTER_TOKEN" &
+
 export MODELSCOPE_CACHE=${MODELSCOPE_CACHE:-$CACHE_ROOT/modelscope}
 export HF_HOME=${HF_HOME:-$CACHE_ROOT/huggingface}
 export PYTHONPATH="$DITTO_ROOT:$APP_ROOT${PYTHONPATH:+:$PYTHONPATH}"
@@ -42,10 +53,10 @@ if [[ -z "${ELEVENLABS_API_KEY:-}" ]]; then
     exit 2
 fi
 
-if ! compgen -G "$DATA_ROOT/avatars/$AVATAR_ID/source.*" >/dev/null; then
-    echo "ERROR: Missing $DATA_ROOT/avatars/$AVATAR_ID/source.mp4 (or source.png)." >&2
-    exit 2
-fi
+while ! compgen -G "$DATA_ROOT/avatars/$AVATAR_ID/source.*" >/dev/null; do
+    echo "Waiting for $DATA_ROOT/avatars/$AVATAR_ID/source.mp4 (upload it through JupyterLab)..."
+    sleep 5
+done
 
 if [[ ! -f "$MODEL_ROOT/ditto_cfg/v0.4_hubert_cfg_trt_online.pkl" || \
       ! -f "$MODEL_ROOT/ditto_trt_Ampere_Plus/warp_network_fp16.engine" ]]; then
