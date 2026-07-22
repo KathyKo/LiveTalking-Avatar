@@ -460,8 +460,16 @@ function queueSpeak(text, doInterrupt) {
 function firstSentenceEnd(s) {
     const SOFT_MIN = 20, HARD_MAX = 60;
     let lastSpace = -1;
+    let inUrl = false;
     for (let i = 0; i < s.length; i++) {
         const c = s[i];
+        if (!inUrl && (s.startsWith('https://', i) || s.startsWith('http://', i))) {
+            inUrl = true;
+        }
+        if (inUrl) {
+            if (/\s/.test(c)) inUrl = false;
+            continue;
+        }
         if ('!?。！？\n'.includes(c)) return i;                                   // strong sentence end
         if (c === '.' && i + 1 < s.length && /\s/.test(s[i + 1])) return i;       // period + space
         if (i >= SOFT_MIN && ',，、;；:：'.includes(c)) return i;                   // long clause → break at comma
@@ -496,29 +504,36 @@ function renderBotBubble(el, text) {
         content.textContent = text;
         return;
     }
-    const videos = [];
-    const markdown = text.replace(VIDEO_URL_RE, (_, url) => {
-        videos.push(url);
-        return '';
-    });
-    content.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
-    [...new Set(videos)].forEach(url => {
+    const appendMarkdown = markdown => {
+        if (!markdown) return;
+        const template = document.createElement('template');
+        template.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+        content.appendChild(template.content);
+    };
+    content.replaceChildren();
+    let offset = 0;
+    for (const match of text.matchAll(VIDEO_URL_RE)) {
+        appendMarkdown(text.slice(offset, match.index));
         const video = document.createElement('video');
         video.className = 'chat-media';
         video.controls = true;
         video.playsInline = true;
         video.preload = 'metadata';
-        video.src = url;
+        video.src = match[1];
         content.appendChild(video);
-    });
+        offset = match.index + match[0].length;
+    }
+    appendMarkdown(text.slice(offset));
 }
 
 function toSpeechText(text) {
     return text
         .replace(/(?:📹\s*)?Video Walkthrough\s*:/gi, ' ')
+        .replace(/(?:🗺️?\s*)?Interactive 360°?\s*Tour(?:\s*\(powered by Airsquire\))?\s*:/gi, ' ')
         .replace(VIDEO_URL_RE, ' ')
         .replace(/!?\[([^\]]*)\]\(https?:\/\/[^)]+\)/g, '$1')
         .replace(/https?:\/\/\S+/g, ' ')
+        .replace(/\b(?:id|token|share)=[A-Za-z0-9_-]+/gi, ' ')
         .replace(/[*#_`>~]/g, '')
         .replace(/\s+/g, ' ')
         .trim();
@@ -527,11 +542,12 @@ function toSpeechText(text) {
 function addLatencyRow(bubble) {
     const row = document.createElement('div');
     row.className = 'latency-row';
+    row.hidden = true;
     row.setAttribute('aria-live', 'polite');
-    row.innerHTML = '<span>First character: <strong>--</strong></span>' +
-        '<span>First TTS: <strong>--</strong></span>' +
-        '<span>Complete response: <strong>--</strong></span>' +
-        '<span>Avatar started: <strong>--</strong></span>';
+    row.innerHTML = '<span hidden>First character: <strong></strong></span>' +
+        '<span hidden>First TTS: <strong></strong></span>' +
+        '<span hidden>Complete response: <strong></strong></span>' +
+        '<span hidden>Avatar started: <strong></strong></span>';
     bubble.appendChild(row);
     const values = row.querySelectorAll('strong');
     return { firstChar: values[0], firstTts: values[1], complete: values[2], avatar: values[3] };
@@ -541,6 +557,8 @@ function setLatency(el, startedAt, name) {
     const seconds = (performance.now() - startedAt) / 1000;
     const value = seconds.toFixed(2) + 's';
     el.textContent = value;
+    el.parentElement.hidden = false;
+    el.closest('.latency-row').hidden = false;
     console.info('[latency]', name, value);
 }
 
@@ -602,8 +620,11 @@ async function sendText() {
     // so the avatar starts on sentence 1 instead of waiting for the whole reply.
     const botBubble = addBubble('bot', '');
     const metrics = addLatencyRow(botBubble);
-    await interrupt();                     // stop any current speech
-    watchAvatarTiming(startedAt, turn, metrics, { tts_seq: 0, avatar_seq: 0 });
+    const interruptPromise = interrupt();  // stop speech while the chat request starts in parallel
+    speakQueue = interruptPromise.catch(() => {});
+    interruptPromise.then(() => {
+        watchAvatarTiming(startedAt, turn, metrics, { tts_seq: 0, avatar_seq: 0 });
+    });
     let reply = '', spoken = 0, gotFirstCharacter = false;
     const flushSentences = (force) => {
         for (;;) {

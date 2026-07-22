@@ -10,9 +10,14 @@ def test_avatar_frontend_contract():
         "First character:", "First TTS:", "Complete response:", "Avatar started:"
     ))
     assert 'id="latencyFirst"' not in html
-    assert "DOMPurify.sanitize(marked.parse(markdown))" in html
+    assert "template.innerHTML = DOMPurify.sanitize(marked.parse(markdown))" in html
     assert "className = 'chat-media'" in html
     assert "(?:mp4|mov|webm)" in html
+    assert "content.replaceChildren()" in html
+    assert "s.startsWith('https://', i)" in html
+    assert "row.hidden = true" in html
+    assert "el.parentElement.hidden = false" in html
+    assert "const interruptPromise = interrupt()" in html
     assert "fetch('/avatar_timing'" in html
     assert '<audio id="audio"' not in html
     assert "stream.addTrack(evt.track)" in html
@@ -33,3 +38,10 @@ def test_ditto_exposes_timing_events():
     assert "self._tts_start_seq += 1" in avatar
     assert "self._avatar_start_seq += 1" in avatar
     assert 'app.router.add_post("/avatar_timing", avatar_timing)' in routes
+
+
+def test_elevenlabs_forwards_pcm_while_streaming():
+    tts = (ROOT / "tts" / "elevenlabs_tts.py").read_text(encoding="utf-8")
+    assert 'raw = b"".join(chunks)' not in tts
+    assert "for pcm_chunk in chunks:" in tts
+    assert "self.parent.put_audio_frame(frame, eventpoint)" in tts

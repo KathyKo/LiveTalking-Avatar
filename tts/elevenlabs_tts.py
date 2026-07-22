@@ -39,26 +39,37 @@ class ElevenLabsTTS(BaseTTS):
                     model_id="eleven_flash_v2_5",
                     output_format="pcm_16000",
                 )
-                raw = b"".join(chunks)
+                pcm_buffer = bytearray()
+                frame_bytes = self.chunk * np.dtype(np.int16).itemsize
+                for pcm_chunk in chunks:
+                    if self.state != State.RUNNING:
+                        return
+                    pcm_buffer.extend(pcm_chunk)
+                    while len(pcm_buffer) >= frame_bytes:
+                        raw_frame = bytes(pcm_buffer[:frame_bytes])
+                        del pcm_buffer[:frame_bytes]
+                        frame = np.frombuffer(raw_frame, dtype=np.int16).astype(np.float32) / 32768.0
+                        eventpoint = {}
+                        if first:
+                            eventpoint = {"status": "start", "text": text}
+                            first = False
+                        eventpoint.update(**textevent)
+                        self.parent.put_audio_frame(frame, eventpoint)
             except Exception:
                 logger.exception("elevenlabs tts error")
                 return
 
             logger.info(f"elevenlabs tts time: {time.time()-t_part:.4f}s")
-            stream = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
-            streamlen = stream.shape[0]
-            idx = 0
-            while idx < streamlen:
-                frame = stream[idx:idx + self.chunk]
-                if len(frame) < self.chunk:
-                    frame = np.pad(frame, (0, self.chunk - len(frame)))
+            usable_bytes = len(pcm_buffer) - (len(pcm_buffer) % 2)
+            if usable_bytes:
+                frame = np.frombuffer(bytes(pcm_buffer[:usable_bytes]), dtype=np.int16).astype(np.float32) / 32768.0
+                frame = np.pad(frame, (0, self.chunk - len(frame)))
                 eventpoint = {}
                 if first:
                     eventpoint = {"status": "start", "text": text}
                     first = False
                 eventpoint.update(**textevent)
                 self.parent.put_audio_frame(frame, eventpoint)
-                idx += self.chunk
 
         for _ in range(3):
             self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), {})
