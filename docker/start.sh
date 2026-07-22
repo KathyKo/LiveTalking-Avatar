@@ -69,7 +69,7 @@ fi
 export DITTO_REPO="$DITTO_ROOT"
 export DITTO_CFG=${DITTO_CFG:-$MODEL_ROOT/ditto_cfg/v0.4_hubert_cfg_trt_online.pkl}
 export DITTO_DATA_ROOT=${DITTO_DATA_ROOT:-$MODEL_ROOT/ditto_trt_Ampere_Plus}
-export DITTO_STEPS=${DITTO_STEPS:-15}
+export DITTO_STEPS=${DITTO_STEPS:-10}
 export DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-768}
 export DITTO_ONLINE=${DITTO_ONLINE:-1}
 export DITTO_EMO=${DITTO_EMO:-0}

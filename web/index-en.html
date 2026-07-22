@@ -6,6 +6,8 @@
     <title>AI Avatar</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
     <style>
         :root {
             --primary: #4361ee;
@@ -97,6 +99,10 @@
         .chat-pane .card-body { display: flex; flex-direction: column; height: calc(100% - 78px); padding: 0 24px 28px; }
         #chatResponse { flex: 1; height: auto !important; min-height: 0 !important; border: 0 !important; background: transparent !important; }
         .chat-composer { display: flex; align-items: center; gap: 12px; }
+        .latency-row { display: flex; flex-wrap: wrap; gap: 8px 18px; padding: 10px 8px 0; color: #64748b; font-size: 0.78rem; }
+        .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
+        .chat-bot p:last-child { margin-bottom: 0; }
+        .chat-media { width: 100%; max-height: 320px; margin-top: 8px; border-radius: 6px; background: #000; }
         #txtMessage { height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 1.05rem; padding: 8px 16px; overflow: hidden; }
         @media (max-width: 992px) {
             .main-layout { flex-direction: column; }
@@ -149,9 +155,8 @@
                 <div class="card-header"><i class="bi bi-broadcast"></i> WebRTC Connection</div>
                 <div class="card-body">
                     <div id="offerError" class="alert alert-danger mt-3" role="alert" style="display:none;"></div>
-                    <div class="mt-3">
-                        <video id="video" autoplay playsinline muted style="width:100%; aspect-ratio:16/9; height:auto; max-height:calc(100vh - 48px); display:block; margin:0 auto; object-fit:contain; border-radius:0; background:#000;"></video>
-                        <audio id="audio" autoplay></audio>
+                    <div class="mt-3 avatar-stage">
+                        <video id="video" autoplay playsinline muted style="width:100%; aspect-ratio:4/3; height:auto; max-height:calc(100vh - 210px); display:block; margin:0 auto; object-fit:cover; object-position:center; border-radius:0; background:#000;"></video>
                     </div>
                 </div>
             </div>
@@ -180,6 +185,11 @@
                         <button class="btn-danger-custom btn-sm" onclick="interrupt()" title="Stop the avatar talking"><i class="bi bi-stop-circle"></i> Stop</button>
                         <button class="btn-outline-custom btn-sm" onclick="document.getElementById('chatResponse').innerHTML=''" title="Clear chat"><i class="bi bi-trash"></i></button>
                     </div>
+                    <div class="latency-row" aria-live="polite">
+                        <span>First response: <strong id="latencyFirst">--</strong></span>
+                        <span>Complete response: <strong id="latencyComplete">--</strong></span>
+                        <span>Avatar started: <strong id="latencyAvatar">--</strong></span>
+                    </div>
                 </div>
             </div>
 
@@ -190,6 +200,8 @@
 <script>
 let pc = null;
 let sessionid = null;
+let remoteStream = null;
+let outputAudioUnlocked = false;
 
 function updateStatus(connected) {
     const badge = document.getElementById('statusBadge');
@@ -363,9 +375,16 @@ async function start() {
     } catch (e) { console.warn('iceservers fetch failed, using STUN only', e); }
     const config = { sdpSemantics: 'unified-plan', iceServers };
     pc = new RTCPeerConnection(config);
+    const stream = new MediaStream();
+    remoteStream = stream;
+    const video = document.getElementById('video');
+    video.srcObject = stream;
+    video.muted = !outputAudioUnlocked;
     pc.addEventListener('track', evt => {
-        if (evt.track.kind === 'video') document.getElementById('video').srcObject = evt.streams[0];
-        else document.getElementById('audio').srcObject = evt.streams[0];
+        if (!stream.getTracks().some(track => track.id === evt.track.id)) {
+            stream.addTrack(evt.track);
+        }
+        video.play().catch(() => {});
     });
     pc.addEventListener('connectionstatechange', () => {
         if (pc.connectionState === 'connected') updateStatus(true);
@@ -382,8 +401,10 @@ async function start() {
 const CHAT_API_URL = 'https://voncierge-lang-agent.hipster-virtual.com/chat/sse';
 
 function unlockOutputAudio() {
-    const audio = document.getElementById('audio');
-    if (audio) audio.play().catch(() => {});
+    const video = document.getElementById('video');
+    outputAudioUnlocked = true;
+    video.muted = false;
+    video.play().catch(() => {});
 }
 
 // Send one sentence to the avatar to speak (echo = speak the given text verbatim)
@@ -437,6 +458,74 @@ function addBubble(who, text) {
     return div;
 }
 
+const VIDEO_URL_RE = /`?(https?:\/\/[^\s`<>"']+?\.mp4(?:\?[^\s`<>"']*)?)`?/gi;
+
+function renderBotBubble(el, text) {
+    if (!window.marked || !window.DOMPurify) {
+        el.textContent = text;
+        return;
+    }
+    const videos = [];
+    const markdown = text.replace(VIDEO_URL_RE, (_, url) => {
+        videos.push(url);
+        return '';
+    });
+    el.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+    [...new Set(videos)].forEach(url => {
+        const video = document.createElement('video');
+        video.className = 'chat-media';
+        video.controls = true;
+        video.playsInline = true;
+        video.preload = 'metadata';
+        video.src = url;
+        el.appendChild(video);
+    });
+}
+
+function toSpeechText(text) {
+    return text
+        .replace(/(?:📹\s*)?Video Walkthrough\s*:/gi, ' ')
+        .replace(VIDEO_URL_RE, ' ')
+        .replace(/!?\[([^\]]*)\]\(https?:\/\/[^)]+\)/g, '$1')
+        .replace(/https?:\/\/\S+/g, ' ')
+        .replace(/[*#_`>~]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function setLatency(id, startedAt) {
+    const seconds = (performance.now() - startedAt) / 1000;
+    const value = seconds.toFixed(2) + 's';
+    document.getElementById(id).textContent = value;
+    console.info('[latency]', id, value);
+}
+
+function resetLatencies() {
+    ['latencyFirst', 'latencyComplete', 'latencyAvatar'].forEach(id => {
+        document.getElementById(id).textContent = '--';
+    });
+}
+
+let latencyTurn = 0;
+async function watchAvatarStarted(startedAt, turn) {
+    const deadline = performance.now() + 30000;
+    while (turn === latencyTurn && performance.now() < deadline) {
+        try {
+            const resp = await fetch('/is_speaking', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ sessionid: String(sessionid) }),
+            });
+            const data = await resp.json();
+            if (data.code === 0 && data.data === true) {
+                setLatency('latencyAvatar', startedAt);
+                return;
+            }
+        } catch (e) { /* retry until timeout */ }
+        await new Promise(resolve => setTimeout(resolve, 50));
+    }
+}
+
 async function sendText() {
     unlockOutputAudio();
     const el = document.getElementById('txtMessage');
@@ -444,32 +533,38 @@ async function sendText() {
     const text = el.value.trim();
     const mode = document.getElementById('txtType').value;
     if (!text || !sessionid) return alert('Please connect WebRTC first');
+    const startedAt = performance.now();
+    const turn = ++latencyTurn;
+    resetLatencies();
     el.value = '';
 
     addBubble('user', text);
 
     if (mode === 'echo') {
-        await queueSpeak(text, true);      // just speak what was typed
+        await interrupt();
+        watchAvatarStarted(startedAt, turn);
+        await queueSpeak(text, false);     // just speak what was typed
         return;
     }
 
     // chat: stream text on screen AND speak each sentence the moment it completes,
     // so the avatar starts on sentence 1 instead of waiting for the whole reply.
-    interrupt();                           // stop any current speech
+    await interrupt();                     // stop any current speech
+    watchAvatarStarted(startedAt, turn);
     const botBubble = addBubble('bot', '');
-    let reply = '', spoken = 0, first = true;
+    let reply = '', spoken = 0, gotFirstResponse = false;
     const flushSentences = (force) => {
         for (;;) {
             const rest = reply.slice(spoken);
             const end = firstSentenceEnd(rest);
             if (end < 0) break;
-            const s = rest.slice(0, end + 1).replace(/[*#`]/g, '').trim();
+            const s = toSpeechText(rest.slice(0, end + 1));
             spoken += end + 1;
-            if (s) { queueSpeak(s, first); first = false; }   // 1st sentence interrupts; rest queue
+            if (s) queueSpeak(s, false);
         }
         if (force) {
-            const tail = reply.slice(spoken).replace(/[*#`]/g, '').trim();
-            if (tail) { queueSpeak(tail, first); first = false; }
+            const tail = toSpeechText(reply.slice(spoken));
+            if (tail) queueSpeak(tail, false);
             spoken = reply.length;
         }
     };
@@ -493,17 +588,23 @@ async function sendText() {
                 let obj; try { obj = JSON.parse(line.slice(5).trim()); } catch (e) { continue; }
                 const chunk = obj.data || '';
                 if (chunk) {
-                    botBubble.textContent += chunk;   // stream text out
-                    out.scrollTop = out.scrollHeight;
+                    if (!gotFirstResponse) {
+                        gotFirstResponse = true;
+                        setLatency('latencyFirst', startedAt);
+                    }
                     reply += chunk;
+                    renderBotBubble(botBubble, reply);
+                    out.scrollTop = out.scrollHeight;
                     flushSentences(false);            // speak completed sentences immediately
                 }
                 if (obj.final_token) { done = true; break; }
             }
         }
         flushSentences(true);                         // speak the final partial sentence
+        setLatency('latencyComplete', startedAt);
     } catch (e) {
-        botBubble.textContent += '\n[error: ' + (e.message || e) + ']';
+        reply += '\n[error: ' + (e.message || e) + ']';
+        renderBotBubble(botBubble, reply);
     }
 }
 
@@ -511,12 +612,12 @@ async function sendText() {
 function interrupt() {
     speakGen++;                            // invalidate every sentence still queued in the frontend
     speakQueue = Promise.resolve();
-    if (!sessionid) return;
-    fetch('/interrupt_talk', {
+    if (!sessionid) return Promise.resolve();
+    return fetch('/interrupt_talk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionid: String(sessionid) }),
-    }).then(r => r.json()).then(d => console.log('interrupt:', d));
+    }).then(r => r.json()).then(d => console.log('interrupt:', d)).catch(() => {});
 }
 
 // --- Speaking Status ---
@@ -559,6 +660,7 @@ async function switchAvatar() {
     if (pc) { pc.close(); pc = null; }
     setSessionId(null);
     document.getElementById('video').srcObject = null;
+    remoteStream = null;
     await start();   // start()/negotiate() reads #avatarSelect
 }
 

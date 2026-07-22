@@ -317,6 +317,7 @@ class DittoReal(BaseAvatar):
         Without this, /interrupt_talk leaves the buffered answer playing to the end."""
         self._feed_epoch += 1                      # abort any backpressured put_audio_frame
         self._muted = True                         # drop the interrupted utterance's tail until next 'start'
+        self.speaking = False
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
@@ -445,6 +446,7 @@ class DittoReal(BaseAvatar):
                 current_frame = self._ditto_frames.get_nowait()
                 got_ditto = True
                 in_speech = True
+                self.speaking = True
                 last_ditto_t = now
                 self._prof_frames_used += 1
                 if self._utt_show_pending:
@@ -460,7 +462,9 @@ class DittoReal(BaseAvatar):
             except queue.Empty:
                 if in_speech and (now - last_ditto_t) > _HOLD:
                     in_speech = False  # speech done, resume idle
+                    self.speaking = False
                 if not in_speech:
+                    self.speaking = False
                     current_frame = self._idle_bgr[ii % len(self._idle_bgr)]
                     ii += 1
                     self._prof_idle += 1
@@ -491,6 +495,7 @@ class DittoReal(BaseAvatar):
                 target = time.perf_counter()
             self._prof_log()
         logger.info('ditto pump stop')
+        self.speaking = False
         self._prof_log(force=True)
 
     def render(self, quit_event):
