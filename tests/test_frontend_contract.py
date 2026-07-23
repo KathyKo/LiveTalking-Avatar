@@ -37,7 +37,7 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     assert "DITTO_STEPS=${DITTO_STEPS:-8}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.30}" in script
-    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-360}" in script
+    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-520}" in script
 
 
 def test_ditto_exposes_timing_events():

@@ -242,8 +242,9 @@ class DittoReal(BaseAvatar):
         return " ".join(parts)
 
     def _speech_pending(self):
-        return (not self._audio_out.empty() or
-                self._prof_expected_frames - self._prof_frames_out - self._prof_frames_drop > 0)
+        # Playback state follows real audio, not the profiling counters. Tail
+        # padding can leave those counters nonzero after all output is drained.
+        return not self._audio_out.empty()
 
     def _prof_log(self, force=False):
         if not self._prof:
@@ -509,6 +510,7 @@ class DittoReal(BaseAvatar):
                 if in_speech and not self._speech_pending() and (now - last_ditto_t) > _HOLD:
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
+                    logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
                     current_frame = self._idle_bgr[ii % len(self._idle_bgr)]
