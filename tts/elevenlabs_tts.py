@@ -23,7 +23,10 @@ class ElevenLabsTTS(BaseTTS):
     def txt_to_audio(self, msg: tuple[str, dict]):
         text, textevent = msg
         text = text.strip()
+        final = bool(textevent.get("final"))
         if not text:
+            if final:
+                self._send_silence_tail(text, textevent, True)
             return
 
         first = True
@@ -72,15 +75,16 @@ class ElevenLabsTTS(BaseTTS):
             eventpoint.update(**textevent)
             self.parent.put_audio_frame(frame, eventpoint)
 
-        # Feed a short real silence tail into Ditto. This lets the model close
-        # the mouth before the utterance completes instead of freezing the last
-        # phoneme on screen. The browser provides semantic pause duration.
+        self._send_silence_tail(text, textevent, final)
+        self._previous_text = text
+
+    def _send_silence_tail(self, text, textevent, final):
+        # Sentence pauses keep the mouth closed without resetting Ditto's audio
+        # window. Only the final marker flushes the window and returns to idle.
         pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "520"))))
         for index in range((pause_ms + 19) // 20):
             eventpoint = {}
             if index * 20 + 20 >= pause_ms:
-                eventpoint = {"status": "end", "text": text}
+                eventpoint = {"status": "end" if final else "segment_end", "text": text}
             eventpoint.update(**textevent)
             self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), eventpoint)
-
-        self._previous_text = text

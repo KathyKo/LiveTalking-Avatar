@@ -64,9 +64,11 @@ async def human(request):
             # The browser selects semantic pauses at sentence, paragraph, and
             # list boundaries. Bound them before they reach the realtime path.
             datainfo['pause_ms'] = max(20, min(pause_ms, 1000))
+        datainfo['final'] = bool(params.get('final', True))
 
         if params['type'] == 'echo':
-            avatar_session.put_msg_txt(params['text'], datainfo)
+            if params['text'].strip() or datainfo['final']:
+                avatar_session.put_msg_txt(params['text'], datainfo)
         elif params['type'] == 'chat':
             llm_response = request.app.get("llm_response")
             if llm_response:

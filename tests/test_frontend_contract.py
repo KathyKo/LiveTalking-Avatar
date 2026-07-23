@@ -32,6 +32,8 @@ def test_avatar_frontend_contract():
     assert "const CONTINUATION_PAUSE_MS = 80;" in html
     assert "'excl'" in html
     assert "pause_ms: pauseMs" in html
+    assert "final, sessionid" in html
+    assert "queueSpeak('', false, 520, true)" in html
 
 
 def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
@@ -42,7 +44,8 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     assert "DITTO_HOLD=${DITTO_HOLD:-0.30}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-520}" in script
     assert "DITTO_IDLE_FADE_MS=${DITTO_IDLE_FADE_MS:-120}" in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-40}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-0}" in script
+    assert "DITTO_STOP_DRAIN_S=${DITTO_STOP_DRAIN_S:-1.5}" in script
 
 
 def test_ditto_exposes_timing_events():
@@ -63,3 +66,4 @@ def test_elevenlabs_forwards_pcm_while_streaming():
     assert "elevenlabs first audio:" in tts
     assert "previous_text=self._previous_text or None" in tts
     assert "for index in range((pause_ms + 19) // 20):" in tts
+    assert '"segment_end"' in tts
