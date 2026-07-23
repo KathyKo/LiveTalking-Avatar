@@ -204,13 +204,13 @@ class DittoReal(BaseAvatar):
         self._prof_idle = 0
         self._prof_frames_drop = 0
         self._drop_ditto_frames = 0
-        self._stop_fence_deadline = 0.0
 
         # Backpressure: cap how many frames the SDK may run ahead of playback.
         # TTS delivers a whole answer's audio far faster than real time; without a
         # cap the SDK queues thousands of frames, so an interrupt has to grind the
         # old answer out before the next one starts (~10s). 20 frames ≈ 0.8s lead.
         self._feed_cap = int(os.environ.get("DITTO_FEED_CAP", "20"))
+        self._audio_cap = max(20, self._feed_cap * 2)
         self._feed_epoch = 0   # bumped on flush_talk to abort in-flight feeding
         self._muted = False    # set on flush; drop audio until the next utterance ('start')
         self._utt_t0 = 0.0             # [timing] utterance audio-in time
@@ -284,15 +284,6 @@ class DittoReal(BaseAvatar):
         # dropped instead of finishing. Each new utterance's first chunk carries
         # status='start' → unmute.
         epoch = self._feed_epoch
-        if datainfo.get('status') == 'start' and self._drop_ditto_frames:
-            logger.info("ditto stop fence: waiting for %d stale frames", self._drop_ditto_frames)
-            while self._drop_ditto_frames and time.perf_counter() < self._stop_fence_deadline:
-                if self._feed_epoch != epoch:
-                    return
-                time.sleep(0.008)
-            if self._drop_ditto_frames:
-                logger.warning("ditto stop fence timed out; releasing %d stale frames", self._drop_ditto_frames)
-                self._drop_ditto_frames = 0
         if datainfo.get('status') == 'start' and not self._utt_active:
             self._muted = False
             self._utt_active = True
@@ -308,7 +299,9 @@ class DittoReal(BaseAvatar):
         # so the SDK backlog (and thus interrupt latency) stays bounded. Bails if a
         # flush bumps the epoch or we're shutting down.
         while (self._prof_expected_frames - self._prof_frames_out
-               - self._prof_frames_drop) >= self._feed_cap:
+               - self._prof_frames_drop) >= self._feed_cap or \
+              self._ditto_frames.qsize() >= self._feed_cap or \
+              self._audio_out.qsize() >= self._audio_cap:
             if self._feed_epoch != epoch or (getattr(self, 'quit_event', None) is not None
                                              and self.quit_event.is_set()):
                 return
@@ -371,9 +364,6 @@ class DittoReal(BaseAvatar):
         pending = self._prof_expected_frames - self._prof_frames_out - self._prof_frames_drop
         if pending > 0:
             self._drop_ditto_frames += pending     # swallow the SDK's in-flight frames
-        self._stop_fence_deadline = time.perf_counter() + float(
-            os.environ.get("DITTO_STOP_DRAIN_S", "1.5")
-        )
         _drain_queue(self._audio_out)
         _drain_queue(self._ditto_frames)
         _drain_queue(self._frame_keep)
