@@ -75,7 +75,7 @@ class ElevenLabsTTS(BaseTTS):
         # Feed a short real silence tail into Ditto. This lets the model close
         # the mouth before the utterance completes instead of freezing the last
         # phoneme on screen. The browser provides semantic pause duration.
-        pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "160"))))
+        pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "360"))))
         for index in range((pause_ms + 19) // 20):
             eventpoint = {}
             if index * 20 + 20 >= pause_ms:

@@ -434,7 +434,7 @@ function unlockOutputAudio() {
 }
 
 // Send one sentence to the avatar to speak (echo = speak the given text verbatim)
-async function speak(text, doInterrupt, pauseMs = 160) {
+async function speak(text, doInterrupt, pauseMs = 360) {
     unlockOutputAudio();
     const resp = await fetch('/human', {
         method: 'POST',
@@ -448,7 +448,7 @@ async function speak(text, doInterrupt, pauseMs = 160) {
 let speakQueue = Promise.resolve();
 let speakGen = 0;   // bumped by interrupt() to cancel sentences queued but not yet sent
 
-function queueSpeak(text, doInterrupt, pauseMs = 160) {
+function queueSpeak(text, doInterrupt, pauseMs = 360) {
     const gen = speakGen;
     speakQueue = speakQueue.catch(() => {}).then(() => {
         if (gen !== speakGen) return;   // an interrupt happened → drop this stale queued sentence
@@ -500,15 +500,15 @@ function semanticBoundary(s, force = false) {
         if ('!?\u3002\uff01\uff1f'.includes(c) || isPeriod) {
             if (i + 1 >= s.length && !force) return null;
             const paragraph = s.slice(i + 1).match(/^[ \t]*\r?\n[ \t]*\r?\n/);
-            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 460 : 160 };
+            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 680 : 360 };
         }
         if (c === ':' && (i + 1 < s.length || force)) {
             const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
-            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 360 };
+            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 500 };
         }
-        if (i >= HARD_MAX && lastSpace >= 1) return { end: lastSpace + 1, pauseMs: 160 };
+        if (i >= HARD_MAX && lastSpace >= 1) return { end: lastSpace + 1, pauseMs: 360 };
     }
-    return force && s.trim() ? { end: s.length, pauseMs: 160 } : null;
+    return force && s.trim() ? { end: s.length, pauseMs: 360 } : null;
 }
 
 function addBubble(who, text) {
@@ -697,7 +697,7 @@ async function sendText() {
         }
         if (force) {
             const tail = toSpeechText(reply.slice(spoken));
-            if (tail) queueSpeak(tail, false, 160);
+            if (tail) queueSpeak(tail, false, 360);
             spoken = reply.length;
         }
     };

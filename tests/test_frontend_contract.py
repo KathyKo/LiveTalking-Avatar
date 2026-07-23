@@ -32,12 +32,12 @@ def test_avatar_frontend_contract():
     assert "pause_ms: pauseMs" in html
 
 
-def test_ditto_defaults_to_ten_steps():
+def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     script = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
-    assert "DITTO_STEPS=${DITTO_STEPS:-10}" in script
+    assert "DITTO_STEPS=${DITTO_STEPS:-8}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
-    assert "DITTO_HOLD=${DITTO_HOLD:-0.04}" in script
-    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-160}" in script
+    assert "DITTO_HOLD=${DITTO_HOLD:-0.30}" in script
+    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-360}" in script
 
 
 def test_ditto_exposes_timing_events():

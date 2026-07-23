@@ -241,6 +241,10 @@ class DittoReal(BaseAvatar):
                 pass
         return " ".join(parts)
 
+    def _speech_pending(self):
+        return (not self._audio_out.empty() or
+                self._prof_expected_frames - self._prof_frames_out - self._prof_frames_drop > 0)
+
     def _prof_log(self, force=False):
         if not self._prof:
             return
@@ -502,7 +506,7 @@ class DittoReal(BaseAvatar):
                                 f"pump_ditto_{dbg_pump_saved:04d}.jpg"), current_frame)
                     dbg_pump_saved += 1
             except queue.Empty:
-                if in_speech and (now - last_ditto_t) > _HOLD:
+                if in_speech and not self._speech_pending() and (now - last_ditto_t) > _HOLD:
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
                 if not in_speech:
@@ -555,7 +559,7 @@ class DittoReal(BaseAvatar):
         # Do NOT add use_d_keys here — it restricts the applied keys and flattens
         # the mouth so the output looks like raw source playback (reverted).
         setup_kwargs = dict(
-            sampling_timesteps=int(os.environ.get("DITTO_STEPS", "15")),
+            sampling_timesteps=int(os.environ.get("DITTO_STEPS", "8")),
             max_size=int(os.environ.get("DITTO_MAX_SIZE", "640")),
             emo=int(os.environ.get("DITTO_EMO", "4")),
             online_mode=os.environ.get("DITTO_ONLINE", "0") == "1",
