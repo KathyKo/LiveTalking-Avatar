@@ -485,7 +485,8 @@ function firstSentenceEnd(s) {
 // Split only at semantic boundaries. Comma-sized chunks made ElevenLabs reset
 // prosody and forced Ditto to repeatedly restart its speech motion.
 function semanticBoundary(s, force = false) {
-    const HARD_MAX = 160;
+    const HARD_MAX = 240;
+    const CONTINUATION_PAUSE_MS = 80;
     let lastSpace = -1;
     let inUrl = false;
     for (let i = 0; i < s.length; i++) {
@@ -496,7 +497,13 @@ function semanticBoundary(s, force = false) {
             continue;
         }
         if (c === ' ') lastSpace = i;
-        const isPeriod = c === '.' && (i + 1 >= s.length || /\s/.test(s[i + 1]));
+        const priorToken = s.slice(0, i).match(/([A-Za-z.]{1,12})$/);
+        const abbreviation = priorToken && [
+            'e.g', 'i.e', 'etc', 'vs', 'excl', 'incl', 'approx', 'no',
+            'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'st'
+        ].includes(priorToken[1].toLowerCase());
+        const isPeriod = c === '.' && !abbreviation &&
+            (i + 1 >= s.length || /\s/.test(s[i + 1]));
         if ('!?\u3002\uff01\uff1f'.includes(c) || isPeriod) {
             if (i + 1 >= s.length && !force) return null;
             const paragraph = s.slice(i + 1).match(/^[ \t]*\r?\n[ \t]*\r?\n/);
@@ -506,7 +513,11 @@ function semanticBoundary(s, force = false) {
             const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
             if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 620 };
         }
-        if (i >= HARD_MAX && lastSpace >= 1) return { end: lastSpace + 1, pauseMs: 520 };
+        // A forced word-boundary split is not a sentence break. Keep just enough
+        // silence for the next ElevenLabs request to join without a visible reset.
+        if (i >= HARD_MAX && lastSpace >= 1) {
+            return { end: lastSpace + 1, pauseMs: CONTINUATION_PAUSE_MS };
+        }
     }
     return force && s.trim() ? { end: s.length, pauseMs: 520 } : null;
 }

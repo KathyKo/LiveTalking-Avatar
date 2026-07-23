@@ -28,7 +28,9 @@ def test_avatar_frontend_contract():
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
     assert "function semanticBoundary(s, force = false)" in html
-    assert "const HARD_MAX = 160;" in html
+    assert "const HARD_MAX = 240;" in html
+    assert "const CONTINUATION_PAUSE_MS = 80;" in html
+    assert "'excl'" in html
     assert "pause_ms: pauseMs" in html
 
 
