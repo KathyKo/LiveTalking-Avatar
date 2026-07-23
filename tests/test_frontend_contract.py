@@ -36,8 +36,11 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     script = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
     assert "DITTO_STEPS=${DITTO_STEPS:-8}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
+    assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-3}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.30}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-520}" in script
+    assert "DITTO_IDLE_FADE_MS=${DITTO_IDLE_FADE_MS:-120}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-40}" in script
 
 
 def test_ditto_exposes_timing_events():

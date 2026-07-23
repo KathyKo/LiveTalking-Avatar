@@ -24,6 +24,8 @@ def test_tail_batches_match_audio_duration():
     assert "if not keep_frame:" in source
     assert "if in_speech:" in source
     assert "return not self._audio_out.empty()" in source
+    assert 'DITTO_IDLE_FADE_MS", "120"' in source
+    assert 'DITTO_AV_OFFSET_MS", "40"' in source
 
 
 def test_tts_silence_tail_marks_only_its_final_frame():
