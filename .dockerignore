@@ -9,7 +9,15 @@ __pycache__
 *.log
 *.tar
 *.tar.gz
-data
+data/*
+!data/avatars/
+data/avatars/*
+!data/avatars/ditto_woman/
+!data/avatars/ditto_woman/source.mp4
+!data/avatars/ditto_woman/idle.mp4
+!data/avatars/ditto_man/
+!data/avatars/ditto_man/source.mp4
+!data/avatars/ditto_man/idle.mp4
 models
 checkpoints
 ditto310

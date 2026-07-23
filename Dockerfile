@@ -34,8 +34,11 @@ RUN mkdir -p /opt/ditto-talkinghead \
 
 WORKDIR /opt/livetalking
 COPY . .
+COPY data/avatars/ditto_woman /opt/default-avatars/ditto_woman
+COPY data/avatars/ditto_man /opt/default-avatars/ditto_man
 
-RUN chmod +x docker/start.sh \
+RUN rm -rf data \
+    && chmod +x docker/start.sh \
     && python -m compileall -q app.py avatars server streamout tts utils \
     && python - <<'PY'
 import onnxruntime as ort

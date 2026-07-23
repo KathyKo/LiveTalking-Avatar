@@ -6,6 +6,7 @@ DITTO_ROOT=/opt/ditto-talkinghead
 WORKSPACE_ROOT=${WORKSPACE_ROOT:-/workspace}
 CACHE_ROOT=${CACHE_ROOT:-$WORKSPACE_ROOT/cache}
 AVATAR_ID=${AVATAR_ID:-ditto_woman}
+DEFAULT_AVATAR_ROOT=/opt/default-avatars
 
 OLD_MODEL_ROOT="$WORKSPACE_ROOT/ditto-talkinghead/checkpoints"
 if [[ -n "${DITTO_CHECKPOINTS:-}" ]]; then
@@ -24,6 +25,14 @@ else
 fi
 
 mkdir -p "$DATA_ROOT/avatars" "$MODEL_ROOT" "$CACHE_ROOT/modelscope" "$CACHE_ROOT/huggingface"
+for bundled_avatar in "$DEFAULT_AVATAR_ROOT"/*; do
+    [[ -d "$bundled_avatar" ]] || continue
+    bundled_id=$(basename "$bundled_avatar")
+    if ! compgen -G "$DATA_ROOT/avatars/$bundled_id/source.*" >/dev/null; then
+        cp -a "$bundled_avatar" "$DATA_ROOT/avatars/$bundled_id"
+        echo "Installed bundled avatar: $bundled_id"
+    fi
+done
 ln -sfn "$DATA_ROOT" "$APP_ROOT/data"
 
 JUPYTER_TOKEN=${JUPYTER_TOKEN:-$(python -c 'import secrets; print(secrets.token_urlsafe(24))')}
