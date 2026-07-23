@@ -23,7 +23,7 @@
 #     DITTO_CFG        cfg pkl (use the *pytorch* one on non-Ampere GPUs)
 #     DITTO_DATA_ROOT  model dir (ditto_pytorch)
 #     DITTO_PROF       log stage timings, queue sizes, and frame accounting
-#     DITTO_FEED_CAP   max frames the SDK may run ahead (default 40 ≈ 1.6s). Lower
+#     DITTO_FEED_CAP   max frames the SDK may run ahead (default 20 ≈ 0.8s). Lower
 #                      → snappier interrupt + less buffered lag; too low → stutter.
 #     DITTO_DEBUG      dump the first N writer + source frames and log per-frame
 #                      writer-vs-source / writer-vs-previous diffs (proves whether
@@ -76,6 +76,13 @@ _CHUNKSIZE = (3, 5, 2)
 _PREPAD = _CHUNKSIZE[0] * 640          # 1920
 _SPLIT_LEN = int(sum(_CHUNKSIZE) * 0.04 * 16000) + 80   # 6480
 _HOP = _CHUNKSIZE[1] * 640             # 3200
+
+
+def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
+    """Return real frame counts for each fixed-size final Ditto batch."""
+    remaining = max(0, (audio_chunks + 1) // 2 - scheduled_frames)
+    return [min(batch_frames, remaining - i)
+            for i in range(0, remaining, batch_frames)]
 
 
 def load_model():
@@ -184,6 +191,7 @@ class DittoReal(BaseAvatar):
 
         self._ditto_frames: "Queue" = Queue()  # BGR frames out of Ditto
         self._audio_out: "Queue" = Queue()      # (float32[320], userdata) in feed order
+        self._frame_keep: "Queue" = Queue()     # real audio frame=True, padded tail=False
         self._prof = bool(os.environ.get("DITTO_PROF"))
         self._prof_t0 = self._prof_last = time.perf_counter()
         self._prof_audio_chunks = 0
@@ -200,8 +208,8 @@ class DittoReal(BaseAvatar):
         # Backpressure: cap how many frames the SDK may run ahead of playback.
         # TTS delivers a whole answer's audio far faster than real time; without a
         # cap the SDK queues thousands of frames, so an interrupt has to grind the
-        # old answer out before the next one starts (~10s). ~40 frames ≈ 1.6s lead.
-        self._feed_cap = int(os.environ.get("DITTO_FEED_CAP", "40"))
+        # old answer out before the next one starts (~10s). 20 frames ≈ 0.8s lead.
+        self._feed_cap = int(os.environ.get("DITTO_FEED_CAP", "20"))
         self._feed_epoch = 0   # bumped on flush_talk to abort in-flight feeding
         self._muted = False    # set on flush; drop audio until the next utterance ('start')
         self._utt_t0 = 0.0             # [timing] utterance audio-in time
@@ -209,6 +217,9 @@ class DittoReal(BaseAvatar):
         self._utt_show_pending = False # log audio-in → first frame SHOWN (speak start)
         self._tts_start_seq = 0
         self._avatar_start_seq = 0
+        self._utt_active = False
+        self._utt_audio_chunks = 0
+        self._utt_frames_scheduled = 0
 
         # ── diagnostics (DITTO_DEBUG) — prove writer frames ≠ source frames ──
         self._dbg = bool(os.environ.get("DITTO_DEBUG"))
@@ -249,9 +260,14 @@ class DittoReal(BaseAvatar):
             self._ditto_frames.qsize(), self._audio_out.qsize(),
             self._sdk_queue_sizes())
 
-    def _run_chunk(self, audio, chunksize):
+    def _run_chunk(self, audio, chunksize, keep_frames=None):
         self._prof_run_chunks += 1
         self._prof_expected_frames += chunksize[1]
+        if self._utt_active:
+            self._utt_frames_scheduled += chunksize[1]
+            keep_frames = chunksize[1] if keep_frames is None else keep_frames
+            for i in range(chunksize[1]):
+                self._frame_keep.put(i < keep_frames)
         self.sdk.run_chunk(audio, chunksize)
         self._prof_log()
 
@@ -263,6 +279,9 @@ class DittoReal(BaseAvatar):
         # status='start' → unmute.
         if datainfo.get('status') == 'start':
             self._muted = False
+            self._utt_active = True
+            self._utt_audio_chunks = 0
+            self._utt_frames_scheduled = 0
             self._tts_start_seq += 1
             self._utt_t0 = time.perf_counter()   # [timing] this utterance's audio arrived
             self._utt_gen_pending = True
@@ -282,6 +301,8 @@ class DittoReal(BaseAvatar):
         if self._feed_epoch != epoch:
             return
         a = np.asarray(audio_chunk, dtype=np.float32)
+        if self._utt_active:
+            self._utt_audio_chunks += 1
         self._prof_audio_chunks += 1
         self._prof_audio_samples += len(a)
         # queued for the speaker, in the same order it drives the mouth
@@ -299,14 +320,17 @@ class DittoReal(BaseAvatar):
         # then reset — otherwise leftover audio drifts into the next utterance.
         if datainfo.get('status') == 'end':
             self._flush_tail()
+            self._utt_active = False
 
     def _flush_tail(self):
-        while self._feat_pos < len(self._feat_buf):
-            window = self._feat_buf[self._feat_pos:self._feat_pos + _SPLIT_LEN]
+        pos = self._feat_pos
+        for keep_frames in _tail_frame_counts(
+                self._utt_audio_chunks, self._utt_frames_scheduled, _CHUNKSIZE[1]):
+            window = self._feat_buf[pos:pos + _SPLIT_LEN]
             if len(window) < _SPLIT_LEN:
                 window = np.pad(window, (0, _SPLIT_LEN - len(window)))
-            self._run_chunk(window, _CHUNKSIZE)
-            self._feat_pos += _HOP
+            self._run_chunk(window, _CHUNKSIZE, keep_frames=keep_frames)
+            pos += _HOP
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
         self._prof_log(force=True)
@@ -323,6 +347,9 @@ class DittoReal(BaseAvatar):
         self.speaking = False
         self._tts_start_seq = 0
         self._avatar_start_seq = 0
+        self._utt_active = False
+        self._utt_audio_chunks = 0
+        self._utt_frames_scheduled = 0
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
@@ -331,6 +358,7 @@ class DittoReal(BaseAvatar):
             self._drop_ditto_frames += pending     # swallow the SDK's in-flight frames
         _drain_queue(self._audio_out)
         _drain_queue(self._ditto_frames)
+        _drain_queue(self._frame_keep)
         logger.info("ditto flush_talk: cleared buffered speech, swallowing %d in-flight frames",
                     max(0, pending))
 
@@ -340,6 +368,14 @@ class DittoReal(BaseAvatar):
             return
         if self._drop_ditto_frames:
             self._drop_ditto_frames -= 1
+            self._prof_frames_drop += 1
+            self._prof_log()
+            return
+        try:
+            keep_frame = self._frame_keep.get_nowait()
+        except queue.Empty:
+            keep_frame = True
+        if not keep_frame:
             self._prof_frames_drop += 1
             self._prof_log()
             return
@@ -437,7 +473,7 @@ class DittoReal(BaseAvatar):
         current_frame = self._idle_bgr[0]
         last_ditto_t = 0.0
         in_speech = False
-        _HOLD = float(os.environ.get("DITTO_HOLD", "0.25"))
+        _HOLD = float(os.environ.get("DITTO_HOLD", "0.04"))
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "0"))
         dbg_pump_saved = 0
 

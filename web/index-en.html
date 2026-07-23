@@ -458,7 +458,7 @@ function queueSpeak(text, doInterrupt) {
 // anywhere, OR a comma/clause once we're past SOFT_MIN, OR a word boundary once a
 // run passes HARD_MAX — so a long first sentence doesn't stall the avatar.
 function firstSentenceEnd(s) {
-    const SOFT_MIN = 20, HARD_MAX = 60;
+    const SOFT_MIN = 20, HARD_MAX = 40;
     let lastSpace = -1;
     let inUrl = false;
     for (let i = 0; i < s.length; i++) {

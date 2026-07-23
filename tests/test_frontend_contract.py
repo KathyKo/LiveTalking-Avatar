@@ -25,11 +25,14 @@ def test_avatar_frontend_contract():
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
+    assert "const SOFT_MIN = 20, HARD_MAX = 40;" in html
 
 
 def test_ditto_defaults_to_ten_steps():
     script = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
     assert "DITTO_STEPS=${DITTO_STEPS:-10}" in script
+    assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
+    assert "DITTO_HOLD=${DITTO_HOLD:-0.04}" in script
 
 
 def test_ditto_exposes_timing_events():
@@ -45,3 +48,6 @@ def test_elevenlabs_forwards_pcm_while_streaming():
     assert 'raw = b"".join(chunks)' not in tts
     assert "for pcm_chunk in chunks:" in tts
     assert "self.parent.put_audio_frame(frame, eventpoint)" in tts
+    assert "re.split" not in tts
+    assert "for _ in range(3)" not in tts
+    assert "elevenlabs first audio:" in tts
