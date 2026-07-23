@@ -522,7 +522,10 @@ class DittoReal(BaseAvatar):
             self.record_video_data(current_frame)
 
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                if got_ditto:
+                # Keep draining audio during a brief writer gap. Otherwise a
+                # terminal silence tail can wait forever for a frame that has
+                # already been discarded, leaving the last talking frame up.
+                if in_speech:
                     try:
                         a, ud = self._audio_out.get_nowait()
                         pcm = (a * 32767).astype(np.int16)

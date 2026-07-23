@@ -22,6 +22,7 @@ def test_tail_batches_match_audio_duration():
 
     assert "self._frame_keep.put(i < keep_frames)" in source
     assert "if not keep_frame:" in source
+    assert "if in_speech:" in source
 
 
 def test_tts_silence_tail_marks_only_its_final_frame():
