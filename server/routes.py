@@ -56,6 +56,14 @@ async def human(request):
         datainfo = {}
         if params.get('tts'):  # pass through tts parameters (voice, emotion, etc.)
             datainfo['tts'] = params.get('tts')
+        try:
+            pause_ms = int(params.get('pause_ms', 0))
+        except (TypeError, ValueError):
+            pause_ms = 0
+        if pause_ms:
+            # The browser selects semantic pauses at sentence, paragraph, and
+            # list boundaries. Bound them before they reach the realtime path.
+            datainfo['pause_ms'] = max(20, min(pause_ms, 1000))
 
         if params['type'] == 'echo':
             avatar_session.put_msg_txt(params['text'], datainfo)

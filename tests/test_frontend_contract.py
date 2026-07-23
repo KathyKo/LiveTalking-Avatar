@@ -13,6 +13,8 @@ def test_avatar_frontend_contract():
     assert "template.innerHTML = DOMPurify.sanitize(marked.parse(markdown))" in html
     assert "className = 'chat-media'" in html
     assert "(?:mp4|mov|webm)" in html
+    assert "className = 'tour-qr'" in html
+    assert "api.qrserver.com" in html
     assert "content.replaceChildren()" in html
     assert "s.startsWith('https://', i)" in html
     assert "row.hidden = true" in html
@@ -25,7 +27,9 @@ def test_avatar_frontend_contract():
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
-    assert "const SOFT_MIN = 20, HARD_MAX = 40;" in html
+    assert "function semanticBoundary(s, force = false)" in html
+    assert "const HARD_MAX = 160;" in html
+    assert "pause_ms: pauseMs" in html
 
 
 def test_ditto_defaults_to_ten_steps():
@@ -33,6 +37,7 @@ def test_ditto_defaults_to_ten_steps():
     assert "DITTO_STEPS=${DITTO_STEPS:-10}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.04}" in script
+    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-160}" in script
 
 
 def test_ditto_exposes_timing_events():
@@ -51,3 +56,5 @@ def test_elevenlabs_forwards_pcm_while_streaming():
     assert "re.split" not in tts
     assert "for _ in range(3)" not in tts
     assert "elevenlabs first audio:" in tts
+    assert "previous_text=self._previous_text or None" in tts
+    assert "for index in range((pause_ms + 19) // 20):" in tts

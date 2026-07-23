@@ -103,6 +103,9 @@
         .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
         .chat-bot p:last-child { margin-bottom: 0; }
         .chat-media { width: 100%; max-height: 320px; margin-top: 8px; border-radius: 6px; background: #000; }
+        .tour-qr { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
+        .tour-qr img { width: 144px; height: 144px; padding: 6px; border-radius: 4px; background: #fff; }
+        .tour-qr a { font-size: 0.85rem; }
         #txtMessage { height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 1.05rem; padding: 8px 16px; overflow: hidden; }
         @media (max-width: 992px) {
             .main-layout { flex-direction: column; }
@@ -431,12 +434,12 @@ function unlockOutputAudio() {
 }
 
 // Send one sentence to the avatar to speak (echo = speak the given text verbatim)
-async function speak(text, doInterrupt) {
+async function speak(text, doInterrupt, pauseMs = 160) {
     unlockOutputAudio();
     const resp = await fetch('/human', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, type: 'echo', interrupt: doInterrupt, sessionid: String(sessionid) }),
+        body: JSON.stringify({ text, type: 'echo', interrupt: doInterrupt, pause_ms: pauseMs, sessionid: String(sessionid) }),
     });
     const data = await resp.json().catch(() => ({}));
     if (!resp.ok || data.code) throw new Error(data.msg || 'avatar speak failed');
@@ -445,11 +448,11 @@ async function speak(text, doInterrupt) {
 let speakQueue = Promise.resolve();
 let speakGen = 0;   // bumped by interrupt() to cancel sentences queued but not yet sent
 
-function queueSpeak(text, doInterrupt) {
+function queueSpeak(text, doInterrupt, pauseMs = 160) {
     const gen = speakGen;
     speakQueue = speakQueue.catch(() => {}).then(() => {
         if (gen !== speakGen) return;   // an interrupt happened → drop this stale queued sentence
-        return speak(text, doInterrupt);
+        return speak(text, doInterrupt, pauseMs);
     });
     return speakQueue;
 }
@@ -479,6 +482,35 @@ function firstSentenceEnd(s) {
     return -1;
 }
 
+// Split only at semantic boundaries. Comma-sized chunks made ElevenLabs reset
+// prosody and forced Ditto to repeatedly restart its speech motion.
+function semanticBoundary(s, force = false) {
+    const HARD_MAX = 160;
+    let lastSpace = -1;
+    let inUrl = false;
+    for (let i = 0; i < s.length; i++) {
+        const c = s[i];
+        if (!inUrl && (s.startsWith('https://', i) || s.startsWith('http://', i))) inUrl = true;
+        if (inUrl) {
+            if (/\s/.test(c)) inUrl = false;
+            continue;
+        }
+        if (c === ' ') lastSpace = i;
+        const isPeriod = c === '.' && (i + 1 >= s.length || /\s/.test(s[i + 1]));
+        if ('!?\u3002\uff01\uff1f'.includes(c) || isPeriod) {
+            if (i + 1 >= s.length && !force) return null;
+            const paragraph = s.slice(i + 1).match(/^[ \t]*\r?\n[ \t]*\r?\n/);
+            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 460 : 160 };
+        }
+        if (c === ':' && (i + 1 < s.length || force)) {
+            const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
+            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 360 };
+        }
+        if (i >= HARD_MAX && lastSpace >= 1) return { end: lastSpace + 1, pauseMs: 160 };
+    }
+    return force && s.trim() ? { end: s.length, pauseMs: 160 } : null;
+}
+
 function addBubble(who, text) {
     const out = document.getElementById('chatResponse');
     const div = document.createElement('div');
@@ -497,6 +529,15 @@ function addBubble(who, text) {
 }
 
 const VIDEO_URL_RE = /`?(https?:\/\/[^\s`<>"']+?\.(?:mp4|mov|webm)(?:\?[^\s`<>"']*)?)`?/gi;
+const CHAT_URL_RE = /`?(https?:\/\/[^\s`<>"')]+)`?/gi;
+
+function isAirsquireTour(url) {
+    try {
+        return new URL(url).hostname.endsWith('airsquire.ai');
+    } catch (_) {
+        return false;
+    }
+}
 
 function renderBotBubble(el, text) {
     const content = el.querySelector('.bubble-content') || el;
@@ -512,15 +553,34 @@ function renderBotBubble(el, text) {
     };
     content.replaceChildren();
     let offset = 0;
-    for (const match of text.matchAll(VIDEO_URL_RE)) {
+    for (const match of text.matchAll(CHAT_URL_RE)) {
         appendMarkdown(text.slice(offset, match.index));
-        const video = document.createElement('video');
-        video.className = 'chat-media';
-        video.controls = true;
-        video.playsInline = true;
-        video.preload = 'metadata';
-        video.src = match[1];
-        content.appendChild(video);
+        const url = match[1];
+        const directVideo = /\.(?:mp4|mov|webm)(?:\?[^\s`<>"']*)?$/i.test(url);
+        if (directVideo) {
+            const video = document.createElement('video');
+            video.className = 'chat-media';
+            video.controls = true;
+            video.playsInline = true;
+            video.preload = 'metadata';
+            video.src = url;
+            content.appendChild(video);
+        } else if (isAirsquireTour(url)) {
+            const tour = document.createElement('div');
+            tour.className = 'tour-qr';
+            const qr = document.createElement('img');
+            qr.alt = 'QR code for Interactive 360 Tour';
+            qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=144x144&format=svg&data=' + encodeURIComponent(url);
+            const link = document.createElement('a');
+            link.href = url;
+            link.target = '_blank';
+            link.rel = 'noopener noreferrer';
+            link.textContent = 'Open interactive 360 tour';
+            tour.append(qr, link);
+            content.appendChild(tour);
+        } else {
+            appendMarkdown(match[0]);
+        }
         offset = match.index + match[0].length;
     }
     appendMarkdown(text.slice(offset));
@@ -629,15 +689,15 @@ async function sendText() {
     const flushSentences = (force) => {
         for (;;) {
             const rest = reply.slice(spoken);
-            const end = firstSentenceEnd(rest);
-            if (end < 0) break;
-            const s = toSpeechText(rest.slice(0, end + 1));
-            spoken += end + 1;
-            if (s) queueSpeak(s, false);
+            const boundary = semanticBoundary(rest, force);
+            if (!boundary) break;
+            const s = toSpeechText(rest.slice(0, boundary.end));
+            spoken += boundary.end;
+            if (s) queueSpeak(s, false, boundary.pauseMs);
         }
         if (force) {
             const tail = toSpeechText(reply.slice(spoken));
-            if (tail) queueSpeak(tail, false);
+            if (tail) queueSpeak(tail, false, 160);
             spoken = reply.length;
         }
     };

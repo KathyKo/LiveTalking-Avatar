@@ -22,3 +22,11 @@ def test_tail_batches_match_audio_duration():
 
     assert "self._frame_keep.put(i < keep_frames)" in source
     assert "if not keep_frame:" in source
+
+
+def test_tts_silence_tail_marks_only_its_final_frame():
+    source = (Path(__file__).parents[1] / "tts" / "elevenlabs_tts.py").read_text(
+        encoding="utf-8"
+    )
+    assert "for index in range((pause_ms + 19) // 20):" in source
+    assert "if index * 20 + 20 >= pause_ms:" in source

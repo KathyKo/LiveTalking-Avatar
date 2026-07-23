@@ -14,6 +14,11 @@ class ElevenLabsTTS(BaseTTS):
         super().__init__(opt, parent)
         self._client = ElevenLabs(api_key=os.environ["ELEVENLABS_API_KEY"])
         self._voice_id = opt.REF_FILE or "SEWXl8lPSO01tdGbWECX"
+        self._previous_text = ""
+
+    def flush_talk(self):
+        super().flush_talk()
+        self._previous_text = ""
 
     def txt_to_audio(self, msg: tuple[str, dict]):
         text, textevent = msg
@@ -29,6 +34,7 @@ class ElevenLabsTTS(BaseTTS):
                 text=text,
                 model_id="eleven_flash_v2_5",
                 output_format="pcm_16000",
+                previous_text=self._previous_text or None,
             )
             pcm_buffer = bytearray()
             frame_bytes = self.chunk * np.dtype(np.int16).itemsize
@@ -66,8 +72,15 @@ class ElevenLabsTTS(BaseTTS):
             eventpoint.update(**textevent)
             self.parent.put_audio_frame(frame, eventpoint)
 
-        # One 20 ms end marker carries the event. Extra silence made Ditto
-        # synthesize visible mouth movement after the spoken audio had ended.
-        eventpoint = {"status": "end", "text": text}
-        eventpoint.update(**textevent)
-        self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), eventpoint)
+        # Feed a short real silence tail into Ditto. This lets the model close
+        # the mouth before the utterance completes instead of freezing the last
+        # phoneme on screen. The browser provides semantic pause duration.
+        pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "160"))))
+        for index in range((pause_ms + 19) // 20):
+            eventpoint = {}
+            if index * 20 + 20 >= pause_ms:
+                eventpoint = {"status": "end", "text": text}
+            eventpoint.update(**textevent)
+            self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), eventpoint)
+
+        self._previous_text = text
