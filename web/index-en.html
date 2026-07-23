@@ -710,7 +710,9 @@ async function sendText() {
             const tail = toSpeechText(reply.slice(spoken));
             if (tail) queueSpeak(tail, false, 520, false);
             spoken = reply.length;
-            queueSpeak('', false, 520, true);
+            // Every completed sentence already carries its semantic pause.
+            // The empty final marker only flushes Ditto's remaining model tail.
+            queueSpeak('', false, 20, true);
         }
     };
     try {

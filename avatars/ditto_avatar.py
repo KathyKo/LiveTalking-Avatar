@@ -210,7 +210,6 @@ class DittoReal(BaseAvatar):
         # cap the SDK queues thousands of frames, so an interrupt has to grind the
         # old answer out before the next one starts (~10s). 20 frames ≈ 0.8s lead.
         self._feed_cap = int(os.environ.get("DITTO_FEED_CAP", "20"))
-        self._audio_cap = max(20, self._feed_cap * 2)
         self._feed_epoch = 0   # bumped on flush_talk to abort in-flight feeding
         self._muted = False    # set on flush; drop audio until the next utterance ('start')
         self._utt_t0 = 0.0             # [timing] utterance audio-in time
@@ -299,9 +298,7 @@ class DittoReal(BaseAvatar):
         # so the SDK backlog (and thus interrupt latency) stays bounded. Bails if a
         # flush bumps the epoch or we're shutting down.
         while (self._prof_expected_frames - self._prof_frames_out
-               - self._prof_frames_drop) >= self._feed_cap or \
-              self._ditto_frames.qsize() >= self._feed_cap or \
-              self._audio_out.qsize() >= self._audio_cap:
+               - self._prof_frames_drop) >= self._feed_cap:
             if self._feed_epoch != epoch or (getattr(self, 'quit_event', None) is not None
                                              and self.quit_event.is_set()):
                 return
@@ -475,8 +472,8 @@ class DittoReal(BaseAvatar):
     def _pump(self, quit_event: Event):
         # idle:   cycle source frames (smooth animation before/after speech)
         # speech: show Ditto frames; hold last when queue briefly empty (no flicker)
-        # gap > 1.5s after last Ditto frame → resume idle cycling
-        # audio:  always drain so sentences never get cut off
+        # Audio advances only with a newly generated mouth frame. One video frame
+        # represents exactly two 20ms PCM chunks, keeping both timelines locked.
         ii = 0
         current_frame = self._idle_bgr[0]
         last_ditto_t = 0.0
@@ -547,10 +544,7 @@ class DittoReal(BaseAvatar):
             self.record_video_data(current_frame)
 
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                # Keep draining audio during a brief writer gap. Otherwise a
-                # terminal silence tail can wait forever for a frame that has
-                # already been discarded, leaving the last talking frame up.
-                if in_speech:
+                if in_speech and got_ditto:
                     if audio_delay_left:
                         audio_delay_left -= 1
                         pcm, ud = _SILENCE, {}

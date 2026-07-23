@@ -33,7 +33,7 @@ def test_avatar_frontend_contract():
     assert "'excl'" in html
     assert "pause_ms: pauseMs" in html
     assert "final, sessionid" in html
-    assert "queueSpeak('', false, 520, true)" in html
+    assert "queueSpeak('', false, 20, true)" in html
 
 
 def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
