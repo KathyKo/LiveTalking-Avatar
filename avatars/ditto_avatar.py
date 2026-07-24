@@ -472,8 +472,8 @@ class DittoReal(BaseAvatar):
     def _pump(self, quit_event: Event):
         # idle:   cycle source frames (smooth animation before/after speech)
         # speech: show Ditto frames; hold last when queue briefly empty (no flicker)
-        # Audio advances only with a newly generated mouth frame. One video frame
-        # represents exactly two 20ms PCM chunks, keeping both timelines locked.
+        # Keep draining audio through short writer gaps and the terminal silence
+        # tail; waiting for another generated frame can deadlock the final chunk.
         ii = 0
         current_frame = self._idle_bgr[0]
         last_ditto_t = 0.0
@@ -544,7 +544,7 @@ class DittoReal(BaseAvatar):
             self.record_video_data(current_frame)
 
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                if in_speech and got_ditto:
+                if in_speech:
                     if audio_delay_left:
                         audio_delay_left -= 1
                         pcm, ud = _SILENCE, {}

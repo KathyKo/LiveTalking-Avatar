@@ -22,7 +22,8 @@ def test_tail_batches_match_audio_duration():
 
     assert "self._frame_keep.put(i < keep_frames)" in source
     assert "if not keep_frame:" in source
-    assert "if in_speech and got_ditto:" in source
+    assert "if in_speech:" in source
+    assert "if in_speech and got_ditto:" not in source
     assert "return not self._audio_out.empty()" in source
     assert 'DITTO_IDLE_FADE_MS", "120"' in source
     assert 'DITTO_AV_OFFSET_MS", "0"' in source
