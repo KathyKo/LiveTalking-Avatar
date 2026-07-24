@@ -1,5 +1,73 @@
 # RunPod Ditto Setup
 
+## Current RunPod Deployment (Use This First)
+
+The current setup runs from the prebuilt Docker image. Do **not** install pip
+packages, activate a venv, clone Ditto, or run `python app.py` manually.
+
+### 1. Configure the RunPod template
+
+Open **RunPod > Templates > `livetalking-ditto` > Edit** and set:
+
+```text
+Container image:  ghcr.io/kathyko/livetalking-avatar:1f9638e
+Container disk:   40 GB
+Network volume:  50 GB or larger
+Volume mount:     /workspace
+HTTP ports:       8010, 8888
+```
+
+Set these environment variables:
+
+```text
+ELEVENLABS_API_KEY=<RunPod secret containing the ElevenLabs key>
+AVATAR_ID=ditto_woman
+VOICE_ID=SEWXl8lPSO01tdGbWECX
+ASR_MODEL=Qwen/Qwen3-ASR-0.6B
+ASR_DEVICE=cuda:0
+```
+
+The image already supplies the current Ditto defaults (`STEPS=8`,
+`MAX_SIZE=768`, 25 fps) and bundles both `ditto_woman` and `ditto_man`.
+
+### 2. Deploy or restart the Pod
+
+1. Wait for the GitHub **Build Ditto image** Action to be green.
+2. Deploy a Pod from the `livetalking-ditto` template.
+3. Prefer an **A100 SXM**. Attach the existing network volume at `/workspace`.
+4. If a stopped Pod reports that its GPU is unavailable, deploy a new Pod from
+   the same template and attach the same network volume; do not migrate it.
+5. Open the Pod **Logs** tab and wait for:
+
+```text
+JupyterLab: http://<pod-host>:8888/?token=...
+start http server; http://<serverip>:8010/index.html
+```
+
+The first start may download Ditto checkpoints into `/workspace/models/ditto`.
+Later Pods reuse them from the network volume.
+
+### 3. Open the frontend
+
+Replace `<POD_ID>` with the ID shown on the RunPod Pod page:
+
+```text
+Frontend:  https://<POD_ID>-8010.proxy.runpod.net/index-en.html
+Jupyter:   https://<POD_ID>-8888.proxy.runpod.net/lab?token=<JUPYTER_TOKEN>
+```
+
+The frontend connects to the default avatar automatically. The Jupyter token
+is printed in the Pod logs. Port `8010` is the app/backend and port `8888` is
+JupyterLab.
+
+### 4. Updating the application
+
+Push code to `main`, wait for **Build Ditto image** to finish, then update the
+template's Container image to the new commit tag and deploy/restart the Pod.
+Use the fixed commit tag shown in GHCR instead of `latest`.
+
+---
+
 Use this after a pod restart. Run commands inside the pod, not on Windows.
 
 ## 1. Activate Env
@@ -224,4 +292,3 @@ writer: ...it
 ```
 
 If it shows `elevenlabs tts time` but `writer: 0it`, check `stream_pipeline_online.py` for worker exceptions.
-
