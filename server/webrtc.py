@@ -46,6 +46,23 @@ logger = logging.getLogger(__name__)
 from utils.logger import logger as mylogger
 
 
+def _put_latest(media_queue, item):
+    """Keep real-time media moving instead of blocking on stale frames."""
+    try:
+        media_queue.put_nowait(item)
+        return False
+    except queue.Full:
+        try:
+            media_queue.get_nowait()
+        except queue.Empty:
+            pass
+        try:
+            media_queue.put_nowait(item)
+        except queue.Full:
+            pass
+        return True
+
+
 class PlayerStreamTrack(MediaStreamTrack):
     """
     A video track that returns an animated flag.
@@ -190,14 +207,14 @@ class HumanPlayer:
     def push_video(self, frame):
         from av import VideoFrame
         new_frame = VideoFrame.from_ndarray(frame, format="bgr24")
-        self.__video._queue.put((new_frame, None))
+        _put_latest(self.__video._queue, (new_frame, None))
 
     def push_audio(self, frame, eventpoint=None):
         from av import AudioFrame
         new_frame = AudioFrame(format='s16', layout='mono', samples=frame.shape[0])
         new_frame.planes[0].update(frame.tobytes())
         new_frame.sample_rate = 16000
-        self.__audio._queue.put((new_frame, eventpoint))
+        _put_latest(self.__audio._queue, (new_frame, eventpoint))
 
     def get_buffer_size(self) -> int:
         return self.__video._queue.qsize()
