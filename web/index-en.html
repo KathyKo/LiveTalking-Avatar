@@ -507,11 +507,11 @@ function semanticBoundary(s, force = false) {
         if ('!?\u3002\uff01\uff1f'.includes(c) || isPeriod) {
             if (i + 1 >= s.length && !force) return null;
             const paragraph = s.slice(i + 1).match(/^[ \t]*\r?\n[ \t]*\r?\n/);
-            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 760 : 520 };
+            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 900 : 520 };
         }
         if (c === ':' && (i + 1 < s.length || force)) {
             const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
-            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 620 };
+            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 760 };
         }
         // A forced word-boundary split is not a sentence break. Keep just enough
         // silence for the next ElevenLabs request to join without a visible reset.
