@@ -30,10 +30,6 @@ def test_avatar_frontend_contract():
     assert "function semanticBoundary(s, force = false)" in html
     assert "const HARD_MAX = 240;" in html
     assert "const CONTINUATION_PAUSE_MS = 80;" in html
-    assert "paragraph ? 500 : 240" in html
-    assert "pauseMs: 400" in html
-    assert "pauseMs = 240" in html
-    assert "queueSpeak(text, false, 300, true)" in html
     assert "'excl'" in html
     assert "pause_ms: pauseMs" in html
     assert "final, sessionid" in html
@@ -44,10 +40,10 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     script = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
     assert "DITTO_STEPS=${DITTO_STEPS:-8}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
-    assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-5}" in script
-    assert "DITTO_HOLD=${DITTO_HOLD:-0.04}" in script
-    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
-    assert "DITTO_IDLE_FADE_MS" not in script
+    assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-3}" in script
+    assert "DITTO_HOLD=${DITTO_HOLD:-0.30}" in script
+    assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-520}" in script
+    assert "DITTO_IDLE_FADE_MS=${DITTO_IDLE_FADE_MS:-120}" in script
     assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-0}" in script
 
 

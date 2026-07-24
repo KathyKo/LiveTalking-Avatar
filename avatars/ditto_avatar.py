@@ -241,6 +241,11 @@ class DittoReal(BaseAvatar):
                 pass
         return " ".join(parts)
 
+    def _speech_pending(self):
+        # Playback state follows real audio, not the profiling counters. Tail
+        # padding can leave those counters nonzero after all output is drained.
+        return not self._audio_out.empty()
+
     def _prof_log(self, force=False):
         if not self._prof:
             return
@@ -467,36 +472,27 @@ class DittoReal(BaseAvatar):
     def _pump(self, quit_event: Event):
         # idle:   cycle source frames (smooth animation before/after speech)
         # speech: show Ditto frames; hold last when queue briefly empty (no flicker)
-        # Real audio advances only with a generated frame. During a writer gap,
-        # emit silence and hold the frame so audio cannot run ahead of the mouth.
+        # Keep draining audio through short writer gaps and the terminal silence
+        # tail; waiting for another generated frame can deadlock the final chunk.
         ii = 0
         current_frame = self._idle_bgr[0]
         last_ditto_t = 0.0
         in_speech = False
         _HOLD = float(os.environ.get("DITTO_HOLD", "0.04"))
-        _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "5"))
+        _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "3"))
+        _IDLE_FADE_S = max(0.0, float(os.environ.get("DITTO_IDLE_FADE_MS", "120")) / 1000.0)
         # Positive offset makes the video lead the audio. A single video frame
         # is 40ms, while audio packets are 20ms.
         _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "0")) / 20.0)))
         audio_delay_left = 0
-        final_audio_seen = False
-        pump_epoch = self._feed_epoch
+        idle_fade_from = None
+        idle_fade_t = 0.0
         dbg_pump_saved = 0
 
         target = time.perf_counter()
         while not quit_event.is_set():
             now = time.perf_counter()
             got_ditto = False
-            if pump_epoch != self._feed_epoch:
-                pump_epoch = self._feed_epoch
-                in_speech = False
-                self.speaking = False
-                audio_delay_left = 0
-                final_audio_seen = False
-            generation_pending = (
-                self._prof_expected_frames >
-                self._prof_frames_out + self._prof_frames_drop
-            )
             try:
                 if not in_speech and self._ditto_frames.qsize() < _START_BUFFER:
                     raise queue.Empty
@@ -504,7 +500,7 @@ class DittoReal(BaseAvatar):
                 got_ditto = True
                 if not in_speech:
                     audio_delay_left = _AUDIO_DELAY_CHUNKS
-                    final_audio_seen = False
+                    idle_fade_from = None
                 in_speech = True
                 self.speaking = True
                 last_ditto_t = now
@@ -521,17 +517,24 @@ class DittoReal(BaseAvatar):
                                 f"pump_ditto_{dbg_pump_saved:04d}.jpg"), current_frame)
                     dbg_pump_saved += 1
             except queue.Empty:
-                if (in_speech and final_audio_seen and self._audio_out.empty()
-                        and not generation_pending and (now - last_ditto_t) > _HOLD):
+                if in_speech and not self._speech_pending() and (now - last_ditto_t) > _HOLD:
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
+                    idle_fade_from = current_frame.copy()
+                    idle_fade_t = now
                     audio_delay_left = 0
                     logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
                     idle_frame = self._idle_bgr[ii % len(self._idle_bgr)]
                     ii += 1
-                    current_frame = idle_frame
+                    if idle_fade_from is not None and _IDLE_FADE_S:
+                        alpha = min(1.0, (now - idle_fade_t) / _IDLE_FADE_S)
+                        current_frame = cv2.addWeighted(idle_fade_from, 1.0 - alpha, idle_frame, alpha, 0)
+                        if alpha >= 1.0:
+                            idle_fade_from = None
+                    else:
+                        current_frame = idle_frame
                     self._prof_idle += 1
                 else:
                     self._prof_holds += 1
@@ -541,11 +544,7 @@ class DittoReal(BaseAvatar):
             self.record_video_data(current_frame)
 
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                drain_offset_tail = (
-                    in_speech and _AUDIO_DELAY_CHUNKS and not got_ditto
-                    and not generation_pending
-                )
-                if in_speech and (got_ditto or drain_offset_tail):
+                if in_speech:
                     if audio_delay_left:
                         audio_delay_left -= 1
                         pcm, ud = _SILENCE, {}
@@ -555,8 +554,6 @@ class DittoReal(BaseAvatar):
                             pcm = (a * 32767).astype(np.int16)
                         except queue.Empty:
                             pcm, ud = _SILENCE, {}
-                    if ud.get("status") == "end":
-                        final_audio_seen = True
                 else:
                     pcm, ud = _SILENCE, {}
                 self.output.push_audio_frame(pcm, ud)

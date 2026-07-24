@@ -434,7 +434,7 @@ function unlockOutputAudio() {
 }
 
 // Send one sentence to the avatar to speak (echo = speak the given text verbatim)
-async function speak(text, doInterrupt, pauseMs = 240, final = true) {
+async function speak(text, doInterrupt, pauseMs = 520, final = true) {
     unlockOutputAudio();
     const resp = await fetch('/human', {
         method: 'POST',
@@ -448,7 +448,7 @@ async function speak(text, doInterrupt, pauseMs = 240, final = true) {
 let speakQueue = Promise.resolve();
 let speakGen = 0;   // bumped by interrupt() to cancel sentences queued but not yet sent
 
-function queueSpeak(text, doInterrupt, pauseMs = 240, final = true) {
+function queueSpeak(text, doInterrupt, pauseMs = 520, final = true) {
     const gen = speakGen;
     speakQueue = speakQueue.catch(() => {}).then(() => {
         if (gen !== speakGen) return;   // an interrupt happened → drop this stale queued sentence
@@ -507,11 +507,11 @@ function semanticBoundary(s, force = false) {
         if ('!?\u3002\uff01\uff1f'.includes(c) || isPeriod) {
             if (i + 1 >= s.length && !force) return null;
             const paragraph = s.slice(i + 1).match(/^[ \t]*\r?\n[ \t]*\r?\n/);
-            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 500 : 240 };
+            return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 760 : 520 };
         }
         if (c === ':' && (i + 1 < s.length || force)) {
             const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
-            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 400 };
+            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 620 };
         }
         // A forced word-boundary split is not a sentence break. Keep just enough
         // silence for the next ElevenLabs request to join without a visible reset.
@@ -519,7 +519,7 @@ function semanticBoundary(s, force = false) {
             return { end: lastSpace + 1, pauseMs: CONTINUATION_PAUSE_MS };
         }
     }
-    return force && s.trim() ? { end: s.length, pauseMs: 240 } : null;
+    return force && s.trim() ? { end: s.length, pauseMs: 520 } : null;
 }
 
 function addBubble(who, text) {
@@ -683,7 +683,7 @@ async function sendText() {
         metrics.complete.textContent = 'n/a';
         await interrupt();
         watchAvatarTiming(startedAt, turn, metrics, { tts_seq: 0, avatar_seq: 0 });
-        await queueSpeak(text, false, 300, true);     // just speak what was typed
+        await queueSpeak(text, false, 520, true);     // just speak what was typed
         return;
     }
 
@@ -708,7 +708,7 @@ async function sendText() {
         }
         if (force) {
             const tail = toSpeechText(reply.slice(spoken));
-            if (tail) queueSpeak(tail, false, 240, false);
+            if (tail) queueSpeak(tail, false, 520, false);
             spoken = reply.length;
             // Every completed sentence already carries its semantic pause.
             // The empty final marker only flushes Ditto's remaining model tail.
