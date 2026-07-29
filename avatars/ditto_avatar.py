@@ -482,7 +482,7 @@ class DittoReal(BaseAvatar):
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
         # Positive offset makes the video lead the audio. A single video frame
         # is 40ms, while audio packets are 20ms.
-        _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "0")) / 20.0)))
+        _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "60")) / 20.0)))
         audio_delay_left = 0
         dbg_pump_saved = 0
 

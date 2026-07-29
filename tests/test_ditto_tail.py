@@ -29,7 +29,7 @@ def test_tail_batches_match_audio_duration():
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "cv2.addWeighted" not in source
-    assert 'DITTO_AV_OFFSET_MS", "0"' in source
+    assert 'DITTO_AV_OFFSET_MS", "60"' in source
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
