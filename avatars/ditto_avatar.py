@@ -85,6 +85,13 @@ def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
             for i in range(0, remaining, batch_frames)]
 
 
+def _should_advance_audio(in_speech, got_ditto, utterance_active, video_pending):
+    """Keep speech queued during a generation gap; allow only the final tail."""
+    return in_speech and (
+        got_ditto or (not utterance_active and not video_pending)
+    )
+
+
 def load_model():
     return {
         "cfg_pkl": os.environ.get(
@@ -371,15 +378,15 @@ class DittoReal(BaseAvatar):
         frame = np.asarray(frame_rgb)
         if frame.ndim != 3:
             return
+        try:
+            keep_frame = self._frame_keep.get_nowait()
+        except queue.Empty:
+            keep_frame = True
         if self._drop_ditto_frames:
             self._drop_ditto_frames -= 1
             self._prof_frames_drop += 1
             self._prof_log()
             return
-        try:
-            keep_frame = self._frame_keep.get_nowait()
-        except queue.Empty:
-            keep_frame = True
         if not keep_frame:
             self._prof_frames_drop += 1
             self._prof_log()
@@ -531,8 +538,14 @@ class DittoReal(BaseAvatar):
             self.output.push_video_frame(current_frame)
             self.record_video_data(current_frame)
 
+            advance_audio = _should_advance_audio(
+                in_speech,
+                got_ditto,
+                self._utt_active,
+                not self._frame_keep.empty(),
+            )
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                if in_speech:
+                if advance_audio:
                     if audio_delay_left:
                         audio_delay_left -= 1
                         pcm, ud = _SILENCE, {}

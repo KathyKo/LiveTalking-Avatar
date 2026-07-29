@@ -22,8 +22,9 @@ def test_tail_batches_match_audio_duration():
 
     assert "self._frame_keep.put(i < keep_frames)" in source
     assert "if not keep_frame:" in source
-    assert "if in_speech:" in source
-    assert "if in_speech and got_ditto:" not in source
+    assert source.index("keep_frame = self._frame_keep.get_nowait()") < source.index(
+        "if self._drop_ditto_frames:"
+    )
     assert "return not self._audio_out.empty()" in source
     assert 'DITTO_HOLD", "0.10"' in source
     assert 'DITTO_START_BUFFER", "8"' in source
@@ -33,6 +34,27 @@ def test_tail_batches_match_audio_duration():
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
+
+
+def test_audio_waits_for_its_video_during_generation_gaps():
+    source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    function = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_should_advance_audio"
+    )
+    namespace = {}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<sync>", "exec"), namespace)
+    advance = namespace["_should_advance_audio"]
+
+    assert advance(True, True, True, True)
+    assert not advance(True, False, True, True)
+    assert not advance(True, False, True, False)
+    assert not advance(True, False, False, True)
+    assert advance(True, False, False, False)
+    assert not advance(False, True, False, False)
 
 
 def test_tts_silence_tail_marks_only_its_final_frame():
