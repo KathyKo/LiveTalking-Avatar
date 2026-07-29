@@ -20,6 +20,8 @@ def test_avatar_frontend_contract():
     assert "row.hidden = true" in html
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
+    assert "const CHAT_AGENT_ID = 'JTC_M';" in html
+    assert "agent_id: CHAT_AGENT_ID" in html
     assert "fetch('/avatar_timing'" in html
     assert '<audio id="audio"' not in html
     assert "stream.addTrack(evt.track)" in html

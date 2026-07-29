@@ -7,6 +7,7 @@ if TYPE_CHECKING:
 from utils.logger import logger
 
 API_URL = os.getenv("CHAT_API_URL", "https://voncierge-lang-agent.hipster-virtual.com/chat/sse")
+AGENT_ID = os.getenv("CHAT_AGENT_ID", "JTC_M")
 
 # Strip markdown symbols that TTS would read aloud
 _STRIP = str.maketrans("", "", "*#`")
@@ -18,7 +19,7 @@ def llm_response(message, avatar_session: 'BaseAvatar', datainfo: dict = {}):
         session_id = "1212"
         resp = requests.post(
             API_URL,
-            json={"message": message, "session_id": session_id},
+            json={"message": message, "session_id": session_id, "agent_id": AGENT_ID},
             stream=True,
             timeout=60,
         )

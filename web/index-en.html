@@ -425,6 +425,7 @@ async function start() {
 
 // --- Text / Chat ---
 const CHAT_API_URL = 'https://voncierge-lang-agent.hipster-virtual.com/chat/sse';
+const CHAT_AGENT_ID = 'JTC_M';
 
 function unlockOutputAudio() {
     const video = document.getElementById('video');
@@ -719,7 +720,11 @@ async function sendText() {
         const resp = await fetch(CHAT_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, session_id: String(sessionid) }),
+            body: JSON.stringify({
+                message: text,
+                session_id: String(sessionid),
+                agent_id: CHAT_AGENT_ID,
+            }),
         });
         const reader = resp.body.getReader();
         const dec = new TextDecoder();
