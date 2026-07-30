@@ -31,16 +31,15 @@ def test_avatar_frontend_contract():
     assert "scheduleReconnect(5000)" in html
     assert "function semanticBoundary(s, force = false)" in html
     assert "const HARD_MAX = 240;" in html
-    assert "const COMMA_MIN = 48;" in html
     assert "const CONTINUATION_PAUSE_MS = 80;" in html
-    assert "paragraph ? 900 : 600" in html
-    assert "pauseMs: 140" in html
+    assert "const COMMA_MIN" not in html
+    assert "paragraph ? 900 : 520" in html
     assert "pauseMs: 760" in html
     assert "'excl'" in html
     assert "pause_ms: pauseMs" in html
     assert "final, sessionid" in html
     assert "queueSpeak('', false, 20, true)" in html
-    assert "queueSpeak(tail, false, 400, false)" in html
+    assert "queueSpeak(tail, false, 280, false)" in html
 
 
 def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
@@ -52,6 +51,8 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
     assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}" in script
+    assert "DITTO_VAD=${DITTO_VAD:-1}" in script
+    assert "DITTO_VAD_RMS=${DITTO_VAD_RMS:-0.001}" in script
 
 
 def test_ditto_exposes_timing_events():

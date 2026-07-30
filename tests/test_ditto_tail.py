@@ -35,8 +35,12 @@ def test_tail_batches_match_audio_duration():
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
-    assert "valid_clip_len = self.sdk.audio2motion.valid_clip_len" in source
-    assert "self._drop_ditto_frames += _CHUNKSIZE[1]" not in source
+    assert "valid_clip_len = self.sdk.audio2motion.valid_clip_len" not in source
+    assert "self._drop_ditto_frames += _CHUNKSIZE[1]" in source
+    assert "_neutralize_source_lips" not in source
+    assert '"vad_dst": self._vad_dst[source_index]' in source
+    assert 'exp = info["exp"].copy()' in source
+    assert "self._ctrl_frame_next = self._prof_expected_frames" in source
 
 
 def test_tts_silence_tail_marks_only_its_final_frame():
@@ -45,49 +49,35 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     )
     assert "for index in range((pause_ms + 19) // 20):" in source
     assert "if index * 20 + 20 >= pause_ms:" in source
-    assert 'eventpoint = {"ditto_vad": 0.0}' in source
+    assert "ditto_vad" not in source
 
 
-def test_vad_and_neutral_source_lips():
+def test_vad_requires_a_full_silent_video_frame():
     source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
         encoding="utf-8"
     )
     tree = ast.parse(source)
-    functions = {
-        node.name: node for node in tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name in {"_vad_frame_values", "_neutralize_source_lips"}
-    }
-    namespace = {
-        "np": np,
-        "_CHUNKSIZE": (3, 5, 2),
-        "_PREPAD": 1920,
-        "_LIP_POINTS": (6, 12, 14, 17, 19, 20),
-    }
-    exec(
-        compile(ast.Module(body=list(functions.values()), type_ignores=[]), "<sync>", "exec"),
-        namespace,
+    function = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_vad_frame_values"
     )
+    namespace = {"np": np, "_CHUNKSIZE": (3, 5, 2), "_PREPAD": 1920}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<vad>", "exec"), namespace)
 
-    vad = np.concatenate([
-        np.ones(1920),
-        np.ones(640),
-        np.full(640, 0.5),
-        np.zeros(640 * 3),
-        np.ones(80),
-    ])
-    assert namespace["_vad_frame_values"](vad) == [1.0, 0.5, 0.0, 0.0, 0.0]
+    window = np.zeros(6480, dtype=np.float32)
+    window[1920:2240] = 1.0
+    assert namespace["_vad_frame_values"](window) == [1.0, 0.0, 0.0, 0.0, 0.0]
 
-    first = np.arange(63, dtype=np.float32).reshape(1, 63)
-    neutral = first + 100
-    source_info = {
-        "x_s_info_lst": [{"exp": first.copy()}, {"exp": neutral.copy()}]
-    }
-    assert namespace["_neutralize_source_lips"](source_info, 1) == 1
-    result = source_info["x_s_info_lst"][0]["exp"].reshape(21, 3)
-    expected = neutral.reshape(21, 3)
-    assert np.array_equal(
-        result[[6, 12, 14, 17, 19, 20]],
-        expected[[6, 12, 14, 17, 19, 20]],
+    mirror = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_source_frame_index"
     )
-    assert np.array_equal(result[0], first.reshape(21, 3)[0])
+    exec(compile(ast.Module(body=[mirror], type_ignores=[]), "<mirror>", "exec"), namespace)
+    assert [namespace["_source_frame_index"](i, 3) for i in range(8)] == [
+        0, 1, 2, 2, 1, 0, 0, 1
+    ]
+
+
+def test_docker_patches_vad_to_use_an_isolated_neutral_target():
+    dockerfile = (Path(__file__).parents[1] / "Dockerfile").read_text(encoding="utf-8")
+    assert 'kwargs.get("vad_dst", x_s_info)' in dockerfile

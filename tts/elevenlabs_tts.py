@@ -83,11 +83,8 @@ class ElevenLabsTTS(BaseTTS):
         # window. Only the final marker flushes the window and returns to idle.
         pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "520"))))
         for index in range((pause_ms + 19) // 20):
-            eventpoint = {"ditto_vad": 0.0}
+            eventpoint = {}
             if index * 20 + 20 >= pause_ms:
-                eventpoint.update(
-                    status="end" if final else "segment_end",
-                    text=text,
-                )
+                eventpoint = {"status": "end" if final else "segment_end", "text": text}
             eventpoint.update(**textevent)
             self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), eventpoint)

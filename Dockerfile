@@ -29,7 +29,9 @@ RUN mkdir -p /opt/ditto-talkinghead \
     && git fetch --depth 1 origin "${DITTO_COMMIT}" \
     && git checkout --detach FETCH_HEAD \
     && sed -i 's/np\.atan2/np.arctan2/g' core/aux_models/mediapipe_landmark478.py \
+    && sed -i 's/ctrl_vad(x_d_info, x_s_info, kwargs.get("vad_alpha", 1))/ctrl_vad(x_d_info, kwargs.get("vad_dst", x_s_info), kwargs.get("vad_alpha", 1))/' core/atomic_components/motion_stitch.py \
     && grep -q 'np.arctan2' core/aux_models/mediapipe_landmark478.py \
+    && grep -q 'kwargs.get("vad_dst", x_s_info)' core/atomic_components/motion_stitch.py \
     && rm -rf .git
 
 WORKDIR /opt/livetalking

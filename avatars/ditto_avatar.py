@@ -74,7 +74,20 @@ _PREPAD = _CHUNKSIZE[0] * 640          # 1920
 _SPLIT_LEN = int(sum(_CHUNKSIZE) * 0.04 * 16000) + 80   # 6480
 _HOP = _CHUNKSIZE[1] * 640             # 3200
 _LIP_POINTS = (6, 12, 14, 17, 19, 20)
-_NEUTRAL_FRAMES = {"ditto_woman": 132, "ditto_man": 169}
+
+
+def _vad_frame_values(vad_window):
+    """A frame is silent only when both of its 20ms audio packets are silent."""
+    values = []
+    for index in range(_CHUNKSIZE[1]):
+        start = _PREPAD + index * 640
+        values.append(float(np.max(vad_window[start:start + 640])))
+    return values
+
+
+def _source_frame_index(index, size):
+    turn, frame = divmod(index, size)
+    return frame if turn % 2 == 0 else size - frame - 1
 
 
 def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
@@ -82,25 +95,6 @@ def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
     remaining = max(0, (audio_chunks + 1) // 2 - scheduled_frames)
     return [min(batch_frames, remaining - i)
             for i in range(0, remaining, batch_frames)]
-
-
-def _vad_frame_values(vad_window):
-    """Map the valid 16kHz audio region to Ditto's five 40ms output frames."""
-    values = []
-    for index in range(_CHUNKSIZE[1]):
-        start = _PREPAD + index * 640
-        values.append(float(np.mean(vad_window[start:start + 640])))
-    return values
-
-
-def _neutralize_source_lips(source_info, frame_index):
-    """Give every video frame one stable closed-mouth expression baseline."""
-    infos = source_info["x_s_info_lst"]
-    frame_index = max(0, min(frame_index, len(infos) - 1))
-    neutral = infos[frame_index]["exp"].reshape(-1, 21, 3)[:, _LIP_POINTS].copy()
-    for info in infos:
-        info["exp"].reshape(-1, 21, 3)[:, _LIP_POINTS] = neutral
-    return frame_index
 
 
 def load_model():
@@ -205,8 +199,11 @@ class DittoReal(BaseAvatar):
         # Sliding-window buffer for hubert (see constants above). Starts with the
         # prepad so the first window's valid region lines up, exactly as inference.py.
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
-        self._vad_buf = np.zeros(_PREPAD, dtype=np.float32)
+        self._vad_buf = np.ones(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
+        self._vad_enabled = os.environ.get("DITTO_VAD", "1") == "1"
+        self._vad_rms = float(os.environ.get("DITTO_VAD_RMS", "0.001"))
+        self._vad_dst = None
         self._ctrl_frame_next = 0
 
         self._ditto_frames: "Queue" = Queue()  # BGR frames out of Ditto
@@ -288,11 +285,16 @@ class DittoReal(BaseAvatar):
     def _run_chunk(self, audio, chunksize, keep_frames=None, vad_frames=None):
         self._prof_run_chunks += 1
         self._prof_expected_frames += chunksize[1]
-        if vad_frames is not None:
+        if self._vad_enabled and vad_frames is not None:
             for alpha in vad_frames:
                 if alpha < 1.0:
-                    self.sdk.ctrl_info.setdefault(
-                        self._ctrl_frame_next, {})["vad_alpha"] = alpha
+                    source_index = _source_frame_index(
+                        self._ctrl_frame_next, len(self._vad_dst)
+                    )
+                    self.sdk.ctrl_info[self._ctrl_frame_next] = {
+                        "vad_alpha": alpha,
+                        "vad_dst": self._vad_dst[source_index],
+                    }
                 self._ctrl_frame_next += 1
         if self._utt_active:
             self._utt_frames_scheduled += chunksize[1]
@@ -340,23 +342,28 @@ class DittoReal(BaseAvatar):
         self._audio_out.put((a, datainfo))
         # accumulate and drive Ditto's mouth with a sliding 6480-sample window
         self._feat_buf = np.concatenate([self._feat_buf, a])
-        vad_alpha = float(datainfo.get("ditto_vad", 1.0))
-        self._vad_buf = np.concatenate([
-            self._vad_buf, np.full(len(a), vad_alpha, dtype=np.float32)
-        ])
+        if self._vad_enabled:
+            rms = float(np.sqrt(np.mean(a * a))) if len(a) else 0.0
+            alpha = 0.0 if rms <= self._vad_rms else 1.0
+            self._vad_buf = np.concatenate([
+                self._vad_buf, np.full(len(a), alpha, dtype=np.float32)
+            ])
         while self._feat_pos + _SPLIT_LEN <= len(self._feat_buf):
-            start = self._feat_pos
-            end = start + _SPLIT_LEN
+            end = self._feat_pos + _SPLIT_LEN
             self._run_chunk(
-                self._feat_buf[start:end],
+                self._feat_buf[self._feat_pos:end],
                 _CHUNKSIZE,
-                vad_frames=_vad_frame_values(self._vad_buf[start:end]),
+                vad_frames=(
+                    _vad_frame_values(self._vad_buf[self._feat_pos:end])
+                    if self._vad_enabled else None
+                ),
             )
             self._feat_pos += _HOP
         # drop consumed history; nothing before the next window start is needed
         if self._feat_pos:
             self._feat_buf = self._feat_buf[self._feat_pos:]
-            self._vad_buf = self._vad_buf[self._feat_pos:]
+            if self._vad_enabled:
+                self._vad_buf = self._vad_buf[self._feat_pos:]
             self._feat_pos = 0
         # end of an utterance: pad-and-flush the tail so all speech gets frames,
         # then reset — otherwise leftover audio drifts into the next utterance.
@@ -377,11 +384,13 @@ class DittoReal(BaseAvatar):
                 window,
                 _CHUNKSIZE,
                 keep_frames=keep_frames,
-                vad_frames=_vad_frame_values(vad_window),
+                vad_frames=(
+                    _vad_frame_values(vad_window) if self._vad_enabled else None
+                ),
             )
             pos += _HOP
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
-        self._vad_buf = np.zeros(_PREPAD, dtype=np.float32)
+        self._vad_buf = np.ones(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
         self._prof_log(force=True)
 
@@ -402,7 +411,7 @@ class DittoReal(BaseAvatar):
         self._utt_frames_scheduled = 0
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
-        self._vad_buf = np.zeros(_PREPAD, dtype=np.float32)
+        self._vad_buf = np.ones(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
         pending = self._prof_expected_frames - self._prof_frames_out - self._prof_frames_drop
         if pending > 0:
@@ -653,12 +662,25 @@ class DittoReal(BaseAvatar):
         self.sdk.setup(self.source_path, f"/tmp/ditto_{self.opt.sessionid}.mp4",
                        **setup_kwargs)
         logger.info("[ditto-timing] sdk.setup (source processing): %.2fs", time.perf_counter() - _t)
-        avatar_id = os.path.basename(os.path.dirname(self.source_path))
-        neutral_frame = int(os.environ.get(
-            "DITTO_NEUTRAL_FRAME", _NEUTRAL_FRAMES.get(avatar_id, 0)
-        ))
-        neutral_frame = _neutralize_source_lips(self.sdk.source_info, neutral_frame)
-        logger.info("ditto neutral mouth baseline: source frame %d", neutral_frame)
+        if self._vad_enabled:
+            infos = self.sdk.source_info["x_s_info_lst"]
+            avatar_id = os.path.basename(os.path.dirname(self.source_path))
+            defaults = {"ditto_woman": 132, "ditto_man": 169}
+            neutral_frame = int(os.environ.get(
+                "DITTO_NEUTRAL_FRAME", defaults.get(avatar_id, 0)
+            ))
+            neutral_frame = max(0, min(neutral_frame, len(infos) - 1))
+            neutral_lips = (
+                infos[neutral_frame]["exp"]
+                .reshape(-1, 21, 3)[:, _LIP_POINTS]
+                .copy()
+            )
+            self._vad_dst = []
+            for info in infos:
+                exp = info["exp"].copy()
+                exp.reshape(-1, 21, 3)[:, _LIP_POINTS] = neutral_lips
+                self._vad_dst.append({"exp": exp})
+            logger.info("ditto VAD neutral frame: %d", neutral_frame)
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:
@@ -673,12 +695,10 @@ class DittoReal(BaseAvatar):
 
         # Trigger PyTorch JIT compilation now (while idle) so the first real
         # utterance doesn't hit the cold-start penalty (~2fps for first 5-10s).
-        valid_clip_len = self.sdk.audio2motion.valid_clip_len
-        warmup_chunks = (valid_clip_len + _CHUNKSIZE[1] - 1) // _CHUNKSIZE[1]
-        for _ in range(warmup_chunks):
-            self.sdk.run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE)
-        logger.info("ditto warm-up queued: %d chunks for %d feature frames",
-                    warmup_chunks, valid_clip_len)
+        self._drop_ditto_frames += _CHUNKSIZE[1]
+        self._run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE)
+        self._ctrl_frame_next = self._prof_expected_frames
+        logger.info("ditto JIT warm-up chunk queued")
 
         self.tts.render(quit_event)          # TTS → put_audio_frame → run_chunk
         self.output.start()
