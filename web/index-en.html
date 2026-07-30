@@ -486,9 +486,9 @@ function firstSentenceEnd(s) {
 // Split only at semantic boundaries. Comma-sized chunks made ElevenLabs reset
 // prosody and forced Ditto to repeatedly restart its speech motion.
 function semanticBoundary(s, force = false) {
-    const HARD_MAX = 240;
+    const HARD_MAX = 320;
     const CONTINUATION_PAUSE_MS = 80;
-    let lastSpace = -1;
+    let lastSpace = -1, lastClause = -1;
     let inUrl = false;
     for (let i = 0; i < s.length; i++) {
         const c = s[i];
@@ -497,7 +497,8 @@ function semanticBoundary(s, force = false) {
             if (/\s/.test(c)) inUrl = false;
             continue;
         }
-        if (c === ' ') lastSpace = i;
+        if (/\s/.test(c)) lastSpace = i;
+        if (',;'.includes(c)) lastClause = i;
         const priorToken = s.slice(0, i).match(/([A-Za-z.]{1,12})$/);
         const abbreviation = priorToken && [
             'e.g', 'i.e', 'etc', 'vs', 'excl', 'incl', 'approx', 'no',
@@ -517,7 +518,8 @@ function semanticBoundary(s, force = false) {
         // A forced word-boundary split is not a sentence break. Keep just enough
         // silence for the next ElevenLabs request to join without a visible reset.
         if (i >= HARD_MAX && lastSpace >= 1) {
-            return { end: lastSpace + 1, pauseMs: CONTINUATION_PAUSE_MS };
+            const end = lastClause >= 120 ? lastClause + 1 : lastSpace + 1;
+            return { end, pauseMs: CONTINUATION_PAUSE_MS };
         }
     }
     return force && s.trim() ? { end: s.length, pauseMs: 520 } : null;

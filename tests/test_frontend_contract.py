@@ -30,7 +30,7 @@ def test_avatar_frontend_contract():
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
     assert "function semanticBoundary(s, force = false)" in html
-    assert "const HARD_MAX = 240;" in html
+    assert "const HARD_MAX = 320;" in html
     assert "const CONTINUATION_PAUSE_MS = 80;" in html
     assert "const COMMA_MIN" not in html
     assert "paragraph ? 900 : 520" in html
@@ -47,7 +47,7 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     assert "DITTO_STEPS=${DITTO_STEPS:-8}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-8}" in script
-    assert "DITTO_HOLD=${DITTO_HOLD:-0.15}" in script
+    assert "DITTO_IDLE_DELAY=${DITTO_IDLE_DELAY:-0.30}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
     assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-80}" in script

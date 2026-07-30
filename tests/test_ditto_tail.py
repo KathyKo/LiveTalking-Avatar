@@ -23,12 +23,12 @@ def test_tail_batches_match_audio_duration():
     assert plan(52, 20) == [5, 1]
     assert plan(50, 25) == []
 
-    assert "self._frame_keep.put(i < keep_frames)" in source
+    assert "self._frame_keep.put((keep, frame_seq))" in source
     assert "if not keep_frame:" in source
     assert "if in_speech:" in source
     assert "if in_speech and got_ditto:" not in source
     assert "return not self._audio_out.empty()" in source
-    assert 'DITTO_HOLD", "0.15"' in source
+    assert 'DITTO_IDLE_DELAY", "0.30"' in source
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "cv2.addWeighted" not in source
@@ -92,7 +92,7 @@ def test_tts_silence_tail_preserves_final_end_marker():
     assert events[-1][1]["text"] == "Done."
 
 
-def test_closest_idle_frame_uses_visual_similarity():
+def test_idle_transition_matches_recent_motion():
     source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
         encoding="utf-8"
     )
@@ -101,13 +101,16 @@ def test_closest_idle_frame_uses_visual_similarity():
         node.name: node
         for node in tree.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"_frame_small", "_closest_idle_index"}
+        and node.name in {"_frame_small", "_closest_idle_sequence_index"}
     }
     namespace = {"np": np, "cv2": __import__("cv2")}
     exec(
         compile(
             ast.Module(
-                body=[functions["_frame_small"], functions["_closest_idle_index"]],
+                body=[
+                    functions["_frame_small"],
+                    functions["_closest_idle_sequence_index"],
+                ],
                 type_ignores=[],
             ),
             "<idle-match>",
@@ -122,7 +125,32 @@ def test_closest_idle_frame_uses_visual_similarity():
         namespace["_frame_small"](dark),
         namespace["_frame_small"](light),
     ]
-    assert namespace["_closest_idle_index"](light, idle_small) == 1
+    history = [
+        namespace["_frame_small"](dark),
+        namespace["_frame_small"](light),
+    ]
+    assert namespace["_closest_idle_sequence_index"](history, idle_small) == 0
+
+
+def test_audio_clock_drops_stale_generated_frames():
+    source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    function = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_take_due_frame"
+    )
+    namespace = {"queue": __import__("queue")}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<due-frame>", "exec"), namespace)
+
+    frames = namespace["queue"].Queue()
+    for seq in (2, 3, 4, 6):
+        frames.put((seq, f"frame-{seq}"))
+    selected, pending = namespace["_take_due_frame"](frames, None, 4)
+
+    assert selected == "frame-4"
+    assert pending == (6, "frame-6")
 
 
 def test_vad_requires_a_full_silent_video_frame():
