@@ -97,6 +97,21 @@ def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
             for i in range(0, remaining, batch_frames)]
 
 
+def _frame_small(img_bgr):
+    gray = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
+    return cv2.resize(gray, (96, 96), interpolation=cv2.INTER_AREA).astype(np.float32)
+
+
+def _closest_idle_index(frame_bgr, idle_small):
+    if not idle_small:
+        return 0
+    target = _frame_small(frame_bgr)
+    return min(
+        range(len(idle_small)),
+        key=lambda index: float(np.mean(np.abs(target - idle_small[index]))),
+    )
+
+
 def load_model():
     return {
         "cfg_pkl": os.environ.get(
@@ -202,7 +217,6 @@ class DittoReal(BaseAvatar):
         self._vad_buf = np.ones(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
         self._vad_enabled = os.environ.get("DITTO_VAD", "1") == "1"
-        self._vad_rms = float(os.environ.get("DITTO_VAD_RMS", "0.001"))
         self._vad_dst = None
         self._ctrl_frame_next = 0
 
@@ -339,12 +353,17 @@ class DittoReal(BaseAvatar):
         self._prof_audio_chunks += 1
         self._prof_audio_samples += len(a)
         # queued for the speaker, in the same order it drives the mouth
-        self._audio_out.put((a, datainfo))
+        audio_info = {
+            key: value for key, value in datainfo.items()
+            if key != "_ditto_silence"
+        }
+        self._audio_out.put((a, audio_info))
         # accumulate and drive Ditto's mouth with a sliding 6480-sample window
         self._feat_buf = np.concatenate([self._feat_buf, a])
         if self._vad_enabled:
-            rms = float(np.sqrt(np.mean(a * a))) if len(a) else 0.0
-            alpha = 0.0 if rms <= self._vad_rms else 1.0
+            # Only silence inserted by our punctuation/tail logic closes the
+            # mouth. Quiet phonemes from ElevenLabs must remain speech.
+            alpha = 0.0 if datainfo.get("_ditto_silence") else 1.0
             self._vad_buf = np.concatenate([
                 self._vad_buf, np.full(len(a), alpha, dtype=np.float32)
             ])
@@ -456,8 +475,7 @@ class DittoReal(BaseAvatar):
     # Off unless enabled; only those first N writer frames pay any cost.
     @staticmethod
     def _dbg_small(img_bgr):
-        g = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2GRAY)
-        return cv2.resize(g, (96, 96), interpolation=cv2.INTER_AREA).astype(np.float32)
+        return _frame_small(img_bgr)
 
     def _dbg_setup_sources(self):
         os.makedirs(self._dbg_dir, exist_ok=True)
@@ -533,11 +551,11 @@ class DittoReal(BaseAvatar):
         current_frame = self._idle_bgr[0]
         last_ditto_t = 0.0
         in_speech = False
-        _HOLD = float(os.environ.get("DITTO_HOLD", "0.10"))
+        _HOLD = float(os.environ.get("DITTO_HOLD", "0.15"))
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
         # Positive offset makes the video lead the audio. A single video frame
         # is 40ms, while audio packets are 20ms.
-        _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "60")) / 20.0)))
+        _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "80")) / 20.0)))
         audio_delay_left = 0
         dbg_pump_saved = 0
 
@@ -572,6 +590,7 @@ class DittoReal(BaseAvatar):
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
                     audio_delay_left = 0
+                    ii = _closest_idle_index(current_frame, self._idle_small)
                     logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
@@ -692,6 +711,7 @@ class DittoReal(BaseAvatar):
             logger.info("ditto profiling ON")
         # Idle frames = the full source frames Ditto composites onto (RGB→BGR).
         self._idle_bgr = self._load_idle_bgr()
+        self._idle_small = [_frame_small(frame) for frame in self._idle_bgr]
 
         # Trigger PyTorch JIT compilation now (while idle) so the first real
         # utterance doesn't hit the cold-start penalty (~2fps for first 5-10s).

@@ -1,4 +1,5 @@
 import ast
+import os
 from pathlib import Path
 
 import numpy as np
@@ -27,11 +28,11 @@ def test_tail_batches_match_audio_duration():
     assert "if in_speech:" in source
     assert "if in_speech and got_ditto:" not in source
     assert "return not self._audio_out.empty()" in source
-    assert 'DITTO_HOLD", "0.10"' in source
+    assert 'DITTO_HOLD", "0.15"' in source
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "cv2.addWeighted" not in source
-    assert 'DITTO_AV_OFFSET_MS", "60"' in source
+    assert 'DITTO_AV_OFFSET_MS", "80"' in source
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
@@ -50,6 +51,78 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     assert "for index in range((pause_ms + 19) // 20):" in source
     assert "if index * 20 + 20 >= pause_ms:" in source
     assert "ditto_vad" not in source
+    assert '"_ditto_silence": True' in source
+
+
+def test_tts_silence_tail_preserves_final_end_marker():
+    source = (Path(__file__).parents[1] / "tts" / "elevenlabs_tts.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    class_node = next(
+        node for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ElevenLabsTTS"
+    )
+    method = next(
+        node for node in class_node.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_send_silence_tail"
+    )
+    namespace = {"np": np, "os": os}
+    exec(compile(ast.Module(body=[method], type_ignores=[]), "<tts-tail>", "exec"), namespace)
+
+    events = []
+
+    class Parent:
+        @staticmethod
+        def put_audio_frame(frame, event):
+            events.append((frame, event))
+
+    tts = type("TTS", (), {"chunk": 320, "parent": Parent()})()
+    namespace["_send_silence_tail"](
+        tts,
+        "Done.",
+        {"pause_ms": 50, "final": True},
+        True,
+    )
+
+    assert len(events) == 3
+    assert all(event["_ditto_silence"] for _, event in events)
+    assert "status" not in events[0][1]
+    assert events[-1][1]["status"] == "end"
+    assert events[-1][1]["text"] == "Done."
+
+
+def test_closest_idle_frame_uses_visual_similarity():
+    source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    functions = {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name in {"_frame_small", "_closest_idle_index"}
+    }
+    namespace = {"np": np, "cv2": __import__("cv2")}
+    exec(
+        compile(
+            ast.Module(
+                body=[functions["_frame_small"], functions["_closest_idle_index"]],
+                type_ignores=[],
+            ),
+            "<idle-match>",
+            "exec",
+        ),
+        namespace,
+    )
+
+    dark = np.zeros((16, 16, 3), dtype=np.uint8)
+    light = np.full((16, 16, 3), 255, dtype=np.uint8)
+    idle_small = [
+        namespace["_frame_small"](dark),
+        namespace["_frame_small"](light),
+    ]
+    assert namespace["_closest_idle_index"](light, idle_small) == 1
 
 
 def test_vad_requires_a_full_silent_video_frame():

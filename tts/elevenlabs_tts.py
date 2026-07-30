@@ -81,10 +81,13 @@ class ElevenLabsTTS(BaseTTS):
     def _send_silence_tail(self, text, textevent, final):
         # Sentence pauses keep the mouth closed without resetting Ditto's audio
         # window. Only the final marker flushes the window and returns to idle.
-        pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "520"))))
+        pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "300"))))
         for index in range((pause_ms + 19) // 20):
-            eventpoint = {}
+            eventpoint = {"_ditto_silence": True}
             if index * 20 + 20 >= pause_ms:
-                eventpoint = {"status": "end" if final else "segment_end", "text": text}
+                eventpoint.update(
+                    status="end" if final else "segment_end",
+                    text=text,
+                )
             eventpoint.update(**textevent)
             self.parent.put_audio_frame(np.zeros(self.chunk, np.float32), eventpoint)
