@@ -9,12 +9,9 @@
 #     calls self.writer(frame_rgb, fmt="rgb") for every finished frame. We
 #     REPLACE self.sdk.writer with our own sink so those frames go to WebRTC
 #     instead of a file. (Do NOT read writer_queue — that races the writer.)
-#   * LiveTalking's WebRTC tracks each play on their OWN fixed clock: video at
-#     25fps (VIDEO_PTIME=0.040), audio at 20ms. A/V sync therefore depends on
-#     feeding both queues at real-time rate. So we pair each emitted Ditto
-#     frame with the 2 audio chunks (2x20ms = 40ms = 1 frame) that produced it
-#     and push them together from one 25fps pump thread. Frame[k] keeps its
-#     own audio[k] → lip sync is preserved regardless of pipeline latency.
+#   * LiveTalking's WebRTC tracks video at 25fps and audio at 20ms. Audio stays
+#     on that real-time clock; waiting for Ditto's asynchronous writer callback
+#     inserts silence during writer gaps and makes the mouth progressively late.
 #   * Ditto only emits frames while fed audio. When idle we loop the source
 #     frames (source_info["img_rgb_lst"]) + silence so the video isn't black.
 #
@@ -51,7 +48,6 @@ import os
 import sys
 import time
 import queue
-from collections import deque
 import numpy as np
 import cv2
 from queue import Queue
@@ -77,6 +73,8 @@ _CHUNKSIZE = (3, 5, 2)
 _PREPAD = _CHUNKSIZE[0] * 640          # 1920
 _SPLIT_LEN = int(sum(_CHUNKSIZE) * 0.04 * 16000) + 80   # 6480
 _HOP = _CHUNKSIZE[1] * 640             # 3200
+_LIP_POINTS = (6, 12, 14, 17, 19, 20)
+_NEUTRAL_FRAMES = {"ditto_woman": 132, "ditto_man": 169}
 
 
 def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
@@ -86,15 +84,23 @@ def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
             for i in range(0, remaining, batch_frames)]
 
 
-def _audio_tick(pending, audio_pair=(), drain_tail=False):
-    """Return one video tick of paired audio without advancing on frame gaps."""
-    pending.extend(audio_pair)
-    if not audio_pair and not drain_tail:
-        return [None] * _AUDIO_CHUNKS_PER_FRAME
-    return [
-        pending.popleft() if pending else None
-        for _ in range(_AUDIO_CHUNKS_PER_FRAME)
-    ]
+def _vad_frame_values(vad_window):
+    """Map the valid 16kHz audio region to Ditto's five 40ms output frames."""
+    values = []
+    for index in range(_CHUNKSIZE[1]):
+        start = _PREPAD + index * 640
+        values.append(float(np.mean(vad_window[start:start + 640])))
+    return values
+
+
+def _neutralize_source_lips(source_info, frame_index):
+    """Give every video frame one stable closed-mouth expression baseline."""
+    infos = source_info["x_s_info_lst"]
+    frame_index = max(0, min(frame_index, len(infos) - 1))
+    neutral = infos[frame_index]["exp"].reshape(-1, 21, 3)[:, _LIP_POINTS].copy()
+    for info in infos:
+        info["exp"].reshape(-1, 21, 3)[:, _LIP_POINTS] = neutral
+    return frame_index
 
 
 def load_model():
@@ -199,7 +205,9 @@ class DittoReal(BaseAvatar):
         # Sliding-window buffer for hubert (see constants above). Starts with the
         # prepad so the first window's valid region lines up, exactly as inference.py.
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
+        self._vad_buf = np.zeros(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
+        self._ctrl_frame_next = 0
 
         self._ditto_frames: "Queue" = Queue()  # BGR frames out of Ditto
         self._audio_out: "Queue" = Queue()      # (float32[320], userdata) in feed order
@@ -254,18 +262,9 @@ class DittoReal(BaseAvatar):
         return " ".join(parts)
 
     def _speech_pending(self):
-        return (
-            not self._audio_out.empty()
-            or not self._ditto_frames.empty()
-            or self._video_pending()
-        )
-
-    def _video_pending(self):
-        return (
-            self._prof_expected_frames
-            - self._prof_frames_out
-            - self._prof_frames_drop
-        ) > 0
+        # Playback state follows real audio, not the profiling counters. Tail
+        # padding can leave those counters nonzero after all output is drained.
+        return not self._audio_out.empty()
 
     def _prof_log(self, force=False):
         if not self._prof:
@@ -286,9 +285,15 @@ class DittoReal(BaseAvatar):
             self._ditto_frames.qsize(), self._audio_out.qsize(),
             self._sdk_queue_sizes())
 
-    def _run_chunk(self, audio, chunksize, keep_frames=None):
+    def _run_chunk(self, audio, chunksize, keep_frames=None, vad_frames=None):
         self._prof_run_chunks += 1
         self._prof_expected_frames += chunksize[1]
+        if vad_frames is not None:
+            for alpha in vad_frames:
+                if alpha < 1.0:
+                    self.sdk.ctrl_info.setdefault(
+                        self._ctrl_frame_next, {})["vad_alpha"] = alpha
+                self._ctrl_frame_next += 1
         if self._utt_active:
             self._utt_frames_scheduled += chunksize[1]
             keep_frames = chunksize[1] if keep_frames is None else keep_frames
@@ -335,12 +340,23 @@ class DittoReal(BaseAvatar):
         self._audio_out.put((a, datainfo))
         # accumulate and drive Ditto's mouth with a sliding 6480-sample window
         self._feat_buf = np.concatenate([self._feat_buf, a])
+        vad_alpha = float(datainfo.get("ditto_vad", 1.0))
+        self._vad_buf = np.concatenate([
+            self._vad_buf, np.full(len(a), vad_alpha, dtype=np.float32)
+        ])
         while self._feat_pos + _SPLIT_LEN <= len(self._feat_buf):
-            self._run_chunk(self._feat_buf[self._feat_pos:self._feat_pos + _SPLIT_LEN], _CHUNKSIZE)
+            start = self._feat_pos
+            end = start + _SPLIT_LEN
+            self._run_chunk(
+                self._feat_buf[start:end],
+                _CHUNKSIZE,
+                vad_frames=_vad_frame_values(self._vad_buf[start:end]),
+            )
             self._feat_pos += _HOP
         # drop consumed history; nothing before the next window start is needed
         if self._feat_pos:
             self._feat_buf = self._feat_buf[self._feat_pos:]
+            self._vad_buf = self._vad_buf[self._feat_pos:]
             self._feat_pos = 0
         # end of an utterance: pad-and-flush the tail so all speech gets frames,
         # then reset — otherwise leftover audio drifts into the next utterance.
@@ -353,11 +369,19 @@ class DittoReal(BaseAvatar):
         for keep_frames in _tail_frame_counts(
                 self._utt_audio_chunks, self._utt_frames_scheduled, _CHUNKSIZE[1]):
             window = self._feat_buf[pos:pos + _SPLIT_LEN]
+            vad_window = self._vad_buf[pos:pos + _SPLIT_LEN]
             if len(window) < _SPLIT_LEN:
                 window = np.pad(window, (0, _SPLIT_LEN - len(window)))
-            self._run_chunk(window, _CHUNKSIZE, keep_frames=keep_frames)
+                vad_window = np.pad(vad_window, (0, _SPLIT_LEN - len(vad_window)))
+            self._run_chunk(
+                window,
+                _CHUNKSIZE,
+                keep_frames=keep_frames,
+                vad_frames=_vad_frame_values(vad_window),
+            )
             pos += _HOP
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
+        self._vad_buf = np.zeros(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
         self._prof_log(force=True)
 
@@ -378,6 +402,7 @@ class DittoReal(BaseAvatar):
         self._utt_frames_scheduled = 0
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
+        self._vad_buf = np.zeros(_PREPAD, dtype=np.float32)
         self._feat_pos = 0
         pending = self._prof_expected_frames - self._prof_frames_out - self._prof_frames_drop
         if pending > 0:
@@ -413,16 +438,7 @@ class DittoReal(BaseAvatar):
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         if self._dbg and self._dbg_writer_saved < self._dbg_n:
             self._dbg_dump_writer(frame_bgr)
-        # A generated frame represents exactly 40ms, so bind it to the two
-        # 20ms chunks that drove it. The pump must never advance one without
-        # the other; otherwise a writer gap shifts every later mouth shape.
-        audio_pair = []
-        for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-            try:
-                audio_pair.append(self._audio_out.get_nowait())
-            except queue.Empty:
-                audio_pair.append((np.zeros(320, np.float32), {}))
-        self._ditto_frames.put((frame_bgr, audio_pair))
+        self._ditto_frames.put(frame_bgr)
         self._prof_log()
 
     # ── Diagnostics (DITTO_DEBUG=1) ─────────────────────────────────────────
@@ -513,31 +529,20 @@ class DittoReal(BaseAvatar):
         # Positive offset makes the video lead the audio. A single video frame
         # is 40ms, while audio packets are 20ms.
         _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "60")) / 20.0)))
-        shifted_audio = deque()
-        pump_epoch = self._feed_epoch
+        audio_delay_left = 0
         dbg_pump_saved = 0
 
         target = time.perf_counter()
         while not quit_event.is_set():
-            if pump_epoch != self._feed_epoch:
-                pump_epoch = self._feed_epoch
-                shifted_audio.clear()
-                in_speech = False
-                self.speaking = False
-
             now = time.perf_counter()
             got_ditto = False
-            audio_pair = ()
             try:
                 if not in_speech and self._ditto_frames.qsize() < _START_BUFFER:
                     raise queue.Empty
-                current_frame, audio_pair = self._ditto_frames.get_nowait()
+                current_frame = self._ditto_frames.get_nowait()
                 got_ditto = True
                 if not in_speech:
-                    shifted_audio.extend(
-                        (np.zeros(320, np.float32), {})
-                        for _ in range(_AUDIO_DELAY_CHUNKS)
-                    )
+                    audio_delay_left = _AUDIO_DELAY_CHUNKS
                 in_speech = True
                 self.speaking = True
                 last_ditto_t = now
@@ -554,10 +559,10 @@ class DittoReal(BaseAvatar):
                                 f"pump_ditto_{dbg_pump_saved:04d}.jpg"), current_frame)
                     dbg_pump_saved += 1
             except queue.Empty:
-                if (in_speech and not self._speech_pending()
-                        and not shifted_audio and (now - last_ditto_t) > _HOLD):
+                if in_speech and not self._speech_pending() and (now - last_ditto_t) > _HOLD:
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
+                    audio_delay_left = 0
                     logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
@@ -572,15 +577,17 @@ class DittoReal(BaseAvatar):
             self.output.push_video_frame(current_frame)
             self.record_video_data(current_frame)
 
-            if got_ditto:
-                new_audio = audio_pair
-            else:
-                new_audio = ()
-            drain_offset_tail = in_speech and not self._speech_pending()
-            for audio_item in _audio_tick(shifted_audio, new_audio, drain_offset_tail):
-                if audio_item is not None:
-                    a, ud = audio_item
-                    pcm = (a * 32767).astype(np.int16)
+            for _ in range(_AUDIO_CHUNKS_PER_FRAME):
+                if in_speech:
+                    if audio_delay_left:
+                        audio_delay_left -= 1
+                        pcm, ud = _SILENCE, {}
+                    else:
+                        try:
+                            a, ud = self._audio_out.get_nowait()
+                            pcm = (a * 32767).astype(np.int16)
+                        except queue.Empty:
+                            pcm, ud = _SILENCE, {}
                 else:
                     pcm, ud = _SILENCE, {}
                 self.output.push_audio_frame(pcm, ud)
@@ -646,6 +653,12 @@ class DittoReal(BaseAvatar):
         self.sdk.setup(self.source_path, f"/tmp/ditto_{self.opt.sessionid}.mp4",
                        **setup_kwargs)
         logger.info("[ditto-timing] sdk.setup (source processing): %.2fs", time.perf_counter() - _t)
+        avatar_id = os.path.basename(os.path.dirname(self.source_path))
+        neutral_frame = int(os.environ.get(
+            "DITTO_NEUTRAL_FRAME", _NEUTRAL_FRAMES.get(avatar_id, 0)
+        ))
+        neutral_frame = _neutralize_source_lips(self.sdk.source_info, neutral_frame)
+        logger.info("ditto neutral mouth baseline: source frame %d", neutral_frame)
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:
@@ -660,9 +673,12 @@ class DittoReal(BaseAvatar):
 
         # Trigger PyTorch JIT compilation now (while idle) so the first real
         # utterance doesn't hit the cold-start penalty (~2fps for first 5-10s).
-        self._drop_ditto_frames += _CHUNKSIZE[1]
-        self._run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE)
-        logger.info("ditto JIT warm-up chunk queued")
+        valid_clip_len = self.sdk.audio2motion.valid_clip_len
+        warmup_chunks = (valid_clip_len + _CHUNKSIZE[1] - 1) // _CHUNKSIZE[1]
+        for _ in range(warmup_chunks):
+            self.sdk.run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE)
+        logger.info("ditto warm-up queued: %d chunks for %d feature frames",
+                    warmup_chunks, valid_clip_len)
 
         self.tts.render(quit_event)          # TTS → put_audio_frame → run_chunk
         self.output.start()
