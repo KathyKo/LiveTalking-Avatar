@@ -52,7 +52,7 @@ def test_ditto_defaults_keep_quality_without_a_frozen_idle_hold():
     assert "DITTO_IDLE_DELAY" not in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-100}" in script
     assert "DITTO_VAD=${DITTO_VAD:-1}" in script
     assert "DITTO_VAD_RMS=${DITTO_VAD_RMS:-0.006}" in script
     assert "DITTO_VAD_MIN_MS=${DITTO_VAD_MIN_MS:-80}" in script

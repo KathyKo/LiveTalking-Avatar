@@ -580,10 +580,9 @@ class DittoReal(BaseAvatar):
         # Positive offset makes the video lead the audio. A single video frame
         # is 40ms, while audio packets are 20ms.
         _AUDIO_DELAY_CHUNKS = max(
-            0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "60")) / 20.0))
+            0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "100")) / 20.0))
         )
         delayed_audio = deque()
-        final_audio_seen = False
         pump_epoch = self._feed_epoch
         speech_history = deque(maxlen=3)
         dbg_pump_saved = 0
@@ -596,7 +595,6 @@ class DittoReal(BaseAvatar):
                 pump_epoch = self._feed_epoch
                 in_speech = False
                 delayed_audio.clear()
-                final_audio_seen = False
                 ii = _closest_idle_sequence_index(speech_history, self._idle_small)
                 speech_history.clear()
 
@@ -605,7 +603,6 @@ class DittoReal(BaseAvatar):
                 if queued >= max(1, _START_BUFFER) or (queued and not self._utt_active):
                     in_speech = True
                     self.speaking = True
-                    final_audio_seen = False
                     delayed_audio.extend(
                         [(_SILENCE_FLOAT, {})] * _AUDIO_DELAY_CHUNKS
                     )
@@ -647,13 +644,11 @@ class DittoReal(BaseAvatar):
 
             for a, ud in audio_packets:
                 pcm = (a * 32767).astype(np.int16)
-                final_audio_seen = final_audio_seen or ud.get("status") == "end"
                 self.output.push_audio_frame(pcm, ud)
                 self.record_audio_data(pcm)
 
             if in_speech:
-                if (final_audio_seen and not self._speech_pending()
-                        and not delayed_audio):
+                if not self._speech_pending() and not delayed_audio:
                     in_speech = False
                     self.speaking = False
                     ii = _closest_idle_sequence_index(speech_history, self._idle_small)
