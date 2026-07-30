@@ -9,9 +9,9 @@
 #     calls self.writer(frame_rgb, fmt="rgb") for every finished frame. We
 #     REPLACE self.sdk.writer with our own sink so those frames go to WebRTC
 #     instead of a file. (Do NOT read writer_queue — that races the writer.)
-#   * LiveTalking's WebRTC tracks video at 25fps and audio at 20ms. Audio stays
-#     on that real-time clock; waiting for Ditto's asynchronous writer callback
-#     inserts silence during writer gaps and makes the mouth progressively late.
+#   * LiveTalking's WebRTC tracks video at 25fps and audio at 20ms. Each generated
+#     frame must stay paired with the two audio packets that drove it; advancing
+#     either side alone creates visible drift.
 #   * Ditto only emits frames while fed audio. When idle we loop the source
 #     frames (source_info["img_rgb_lst"]) + silence so the video isn't black.
 #
@@ -65,7 +65,7 @@ if _DITTO_REPO not in sys.path:
 # 2 audio chunks (20ms each) per 25fps video frame. The WebRTC video track is
 # hardwired to 25fps in server/webrtc.py, so this ratio is fixed.
 _AUDIO_CHUNKS_PER_FRAME = 2
-_SILENCE = np.zeros(320, dtype=np.int16)
+_SILENCE_FLOAT = np.zeros(320, dtype=np.float32)
 
 # hubert sliding window, copied from ditto's inference.py (chunksize=(3,5,2)):
 #   prepad 3*640 zeros, window = sum(chunksize)*0.04*16k + 80 = 6480,
@@ -120,22 +120,15 @@ def _closest_idle_sequence_index(history_small, idle_small):
     )
 
 
-def _take_due_frame(frame_queue, pending, target_seq, max_lag=1):
-    """Take the newest generated frame still close to the audio clock."""
-    selected = None
-    while True:
-        if pending is None:
-            try:
-                pending = frame_queue.get_nowait()
-            except queue.Empty:
-                break
-        seq, frame = pending
-        if seq > target_seq:
-            break
-        pending = None
-        if seq >= target_seq - max_lag:
-            selected = frame
-    return selected, pending
+def _take_audio_pair(audio_queue):
+    """Take the 40 ms of audio represented by one generated video frame."""
+    pair = []
+    for _ in range(_AUDIO_CHUNKS_PER_FRAME):
+        try:
+            pair.append(audio_queue.get_nowait())
+        except queue.Empty:
+            pair.append((_SILENCE_FLOAT, {}))
+    return pair
 
 
 def load_model():
@@ -246,7 +239,7 @@ class DittoReal(BaseAvatar):
         self._vad_dst = None
         self._ctrl_frame_next = 0
 
-        self._ditto_frames: "Queue" = Queue()  # (audio-frame seq, BGR frame)
+        self._ditto_frames: "Queue" = Queue()  # (seq, BGR frame, matching 40ms audio)
         self._audio_out: "Queue" = Queue()      # (float32[320], userdata) in feed order
         self._frame_keep: "Queue" = Queue()     # (keep real frame, audio-frame seq)
         self._prof = bool(os.environ.get("DITTO_PROF"))
@@ -300,9 +293,7 @@ class DittoReal(BaseAvatar):
         return " ".join(parts)
 
     def _speech_pending(self):
-        # Playback state follows real audio, not the profiling counters. Tail
-        # padding can leave those counters nonzero after all output is drained.
-        return not self._audio_out.empty()
+        return self._utt_active or not self._audio_out.empty() or not self._ditto_frames.empty()
 
     def _prof_log(self, force=False):
         if not self._prof:
@@ -501,7 +492,7 @@ class DittoReal(BaseAvatar):
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         if self._dbg and self._dbg_writer_saved < self._dbg_n:
             self._dbg_dump_writer(frame_bgr)
-        self._ditto_frames.put((frame_seq, frame_bgr))
+        self._ditto_frames.put((frame_seq, frame_bgr, _take_audio_pair(self._audio_out)))
         self._prof_log()
 
     # ── Diagnostics (DITTO_DEBUG=1) ─────────────────────────────────────────
@@ -579,21 +570,19 @@ class DittoReal(BaseAvatar):
 
     def _pump(self, quit_event: Event):
         # idle:   cycle source frames (smooth animation before/after speech)
-        # speech: audio is the clock; late generated frames are discarded instead
-        # of being replayed after their matching sound has already passed.
+        # speech: every generated frame carries its matching 40 ms of audio.
+        # If generation briefly falls behind, both wait together instead of
+        # dropping mouth frames while the sound continues.
         ii = 0
         current_frame = self._idle_bgr[0]
         in_speech = False
-        _IDLE_DELAY = float(os.environ.get("DITTO_IDLE_DELAY", "0.30"))
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
         # Positive offset makes the video lead the audio. A single video frame
         # is 40ms, while audio packets are 20ms.
-        _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "80")) / 20.0)))
-        audio_delay_left = 0
-        audio_clock_chunks = 0
-        target_frame_seq = 0
-        pending_ditto = None
-        audio_drained_at = None
+        _AUDIO_DELAY_CHUNKS = max(
+            0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "60")) / 20.0))
+        )
+        delayed_audio = deque()
         final_audio_seen = False
         pump_epoch = self._feed_epoch
         speech_history = deque(maxlen=3)
@@ -602,44 +591,44 @@ class DittoReal(BaseAvatar):
         target = time.perf_counter()
         while not quit_event.is_set():
             got_ditto = False
+            audio_packets = [(_SILENCE_FLOAT, {})] * _AUDIO_CHUNKS_PER_FRAME
             if pump_epoch != self._feed_epoch:
                 pump_epoch = self._feed_epoch
                 in_speech = False
-                pending_ditto = None
-                audio_delay_left = 0
-                audio_drained_at = None
+                delayed_audio.clear()
                 final_audio_seen = False
                 ii = _closest_idle_sequence_index(speech_history, self._idle_small)
                 speech_history.clear()
 
             if not in_speech:
-                if (self._speech_pending()
-                        and self._ditto_frames.qsize() >= max(1, _START_BUFFER)):
-                    target_frame_seq, current_frame = self._ditto_frames.get_nowait()
+                queued = self._ditto_frames.qsize()
+                if queued >= max(1, _START_BUFFER) or (queued and not self._utt_active):
                     in_speech = True
                     self.speaking = True
-                    audio_delay_left = _AUDIO_DELAY_CHUNKS
-                    audio_clock_chunks = 0
-                    audio_drained_at = None
                     final_audio_seen = False
+                    delayed_audio.extend(
+                        [(_SILENCE_FLOAT, {})] * _AUDIO_DELAY_CHUNKS
+                    )
                     speech_history.clear()
-                    speech_history.append(_frame_small(current_frame))
-                    got_ditto = True
                 else:
                     self.speaking = False
                     current_frame = self._idle_bgr[ii % len(self._idle_bgr)]
                     ii += 1
                     self._prof_idle += 1
-            else:
-                selected, pending_ditto = _take_due_frame(
-                    self._ditto_frames, pending_ditto, target_frame_seq
-                )
-                if selected is not None:
-                    current_frame = selected
+
+            if in_speech:
+                try:
+                    _, current_frame, matching_audio = self._ditto_frames.get_nowait()
                     speech_history.append(_frame_small(current_frame))
+                    delayed_audio.extend(matching_audio)
                     got_ditto = True
-                else:
+                except queue.Empty:
                     self._prof_holds += 1
+                if got_ditto or not self._speech_pending():
+                    audio_packets = [
+                        delayed_audio.popleft() if delayed_audio else (_SILENCE_FLOAT, {})
+                        for _ in range(_AUDIO_CHUNKS_PER_FRAME)
+                    ]
 
             if got_ditto:
                 self._prof_frames_used += 1
@@ -656,43 +645,20 @@ class DittoReal(BaseAvatar):
             self.output.push_video_frame(current_frame)
             self.record_video_data(current_frame)
 
-            clock_advance = 0
-            for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                if in_speech:
-                    if audio_delay_left:
-                        audio_delay_left -= 1
-                        clock_advance += 1
-                        pcm, ud = _SILENCE, {}
-                    else:
-                        try:
-                            a, ud = self._audio_out.get_nowait()
-                            pcm = (a * 32767).astype(np.int16)
-                            clock_advance += 1
-                            final_audio_seen = final_audio_seen or ud.get("status") == "end"
-                        except queue.Empty:
-                            pcm, ud = _SILENCE, {}
-                else:
-                    pcm, ud = _SILENCE, {}
+            for a, ud in audio_packets:
+                pcm = (a * 32767).astype(np.int16)
+                final_audio_seen = final_audio_seen or ud.get("status") == "end"
                 self.output.push_audio_frame(pcm, ud)
                 self.record_audio_data(pcm)
 
             if in_speech:
-                audio_clock_chunks += clock_advance
-                target_frame_seq = audio_clock_chunks // _AUDIO_CHUNKS_PER_FRAME
-                final_ready = final_audio_seen or not self._utt_active
-                if final_ready and not self._speech_pending() and not audio_delay_left:
-                    if audio_drained_at is None:
-                        audio_drained_at = time.perf_counter()
-                    elif time.perf_counter() - audio_drained_at >= _IDLE_DELAY:
-                        in_speech = False
-                        self.speaking = False
-                        pending_ditto = None
-                        _drain_queue(self._ditto_frames)
-                        ii = _closest_idle_sequence_index(speech_history, self._idle_small)
-                        speech_history.clear()
-                        logger.info("ditto pump: speech drained -> idle")
-                else:
-                    audio_drained_at = None
+                if (final_audio_seen and not self._speech_pending()
+                        and not delayed_audio):
+                    in_speech = False
+                    self.speaking = False
+                    ii = _closest_idle_sequence_index(speech_history, self._idle_small)
+                    speech_history.clear()
+                    logger.info("ditto pump: speech drained -> idle")
 
             target += 0.04
             dt = target - time.perf_counter()

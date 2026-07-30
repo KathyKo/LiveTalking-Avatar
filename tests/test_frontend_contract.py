@@ -40,19 +40,22 @@ def test_avatar_frontend_contract():
     assert "final, sessionid" in html
     assert "queueSpeak('', false, 20, true)" in html
     assert "queueSpeak(tail, false, 280, false)" in html
+    assert r".replace(/\s+-\s+(?=[A-Z])/g, '. ')" in html
 
 
-def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
+def test_ditto_defaults_keep_quality_without_a_frozen_idle_hold():
     script = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
     assert "DITTO_STEPS=${DITTO_STEPS:-8}" in script
+    assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-768}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-8}" in script
-    assert "DITTO_IDLE_DELAY=${DITTO_IDLE_DELAY:-0.30}" in script
+    assert "DITTO_IDLE_DELAY" not in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-80}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}" in script
     assert "DITTO_VAD=${DITTO_VAD:-1}" in script
-    assert "DITTO_VAD_RMS" not in script
+    assert "DITTO_VAD_RMS=${DITTO_VAD_RMS:-0.006}" in script
+    assert "DITTO_VAD_MIN_MS=${DITTO_VAD_MIN_MS:-80}" in script
 
 
 def test_ditto_exposes_timing_events():

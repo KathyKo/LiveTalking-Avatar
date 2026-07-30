@@ -24,15 +24,17 @@ def test_tail_batches_match_audio_duration():
     assert plan(50, 25) == []
 
     assert "self._frame_keep.put((keep, frame_seq))" in source
+    assert "_take_audio_pair(self._audio_out)" in source
     assert "if not keep_frame:" in source
     assert "if in_speech:" in source
     assert "if in_speech and got_ditto:" not in source
-    assert "return not self._audio_out.empty()" in source
-    assert 'DITTO_IDLE_DELAY", "0.30"' in source
+    assert "self._utt_active or not self._audio_out.empty()" in source
+    assert "DITTO_IDLE_DELAY" not in source
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "cv2.addWeighted" not in source
-    assert 'DITTO_AV_OFFSET_MS", "80"' in source
+    assert 'DITTO_AV_OFFSET_MS", "60"' in source
+    assert "_take_due_frame" not in source
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
@@ -52,6 +54,9 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     assert "if index * 20 + 20 >= pause_ms:" in source
     assert "ditto_vad" not in source
     assert '"_ditto_silence": True' in source
+    assert 'DITTO_VAD_RMS", "0.006"' in source
+    assert 'DITTO_VAD_MIN_MS", "80"' in source
+    assert "len(quiet_frames) >= quiet_frames_needed" in source
 
 
 def test_tts_silence_tail_preserves_final_end_marker():
@@ -132,25 +137,33 @@ def test_idle_transition_matches_recent_motion():
     assert namespace["_closest_idle_sequence_index"](history, idle_small) == 0
 
 
-def test_audio_clock_drops_stale_generated_frames():
+def test_generated_frame_takes_exactly_two_audio_packets():
     source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
         encoding="utf-8"
     )
     tree = ast.parse(source)
     function = next(
         node for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_take_due_frame"
+        if isinstance(node, ast.FunctionDef) and node.name == "_take_audio_pair"
     )
-    namespace = {"queue": __import__("queue")}
-    exec(compile(ast.Module(body=[function], type_ignores=[]), "<due-frame>", "exec"), namespace)
+    namespace = {
+        "queue": __import__("queue"),
+        "_AUDIO_CHUNKS_PER_FRAME": 2,
+        "_SILENCE_FLOAT": np.zeros(320, dtype=np.float32),
+    }
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<audio-pair>", "exec"), namespace)
 
-    frames = namespace["queue"].Queue()
-    for seq in (2, 3, 4, 6):
-        frames.put((seq, f"frame-{seq}"))
-    selected, pending = namespace["_take_due_frame"](frames, None, 4)
+    audio = namespace["queue"].Queue()
+    audio.put(("audio-0", {"status": "start"}))
+    audio.put(("audio-1", {}))
+    audio.put(("audio-2", {"status": "end"}))
 
-    assert selected == "frame-4"
-    assert pending == (6, "frame-6")
+    first = namespace["_take_audio_pair"](audio)
+    second = namespace["_take_audio_pair"](audio)
+
+    assert first == [("audio-0", {"status": "start"}), ("audio-1", {})]
+    assert second[0] == ("audio-2", {"status": "end"})
+    assert np.array_equal(second[1][0], namespace["_SILENCE_FLOAT"])
 
 
 def test_vad_requires_a_full_silent_video_frame():

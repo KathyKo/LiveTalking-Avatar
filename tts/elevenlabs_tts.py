@@ -8,6 +8,10 @@ from .base_tts import BaseTTS, State
 from registry import register
 
 
+def _frame_rms(frame):
+    return float(np.sqrt(np.mean(np.square(frame))))
+
+
 @register("tts", "elevenlabs")
 class ElevenLabsTTS(BaseTTS):
     def __init__(self, opt, parent):
@@ -31,6 +35,43 @@ class ElevenLabsTTS(BaseTTS):
 
         first = True
         started = time.perf_counter()
+        quiet_rms = float(os.environ.get("DITTO_VAD_RMS", "0.006"))
+        quiet_frames_needed = max(
+            1, (int(os.environ.get("DITTO_VAD_MIN_MS", "80")) + 19) // 20
+        )
+        quiet_frames = []
+        in_quiet = False
+
+        def emit_frame(frame, silence=False):
+            nonlocal first
+            eventpoint = {}
+            if first:
+                eventpoint = {"status": "start", "text": text}
+                first = False
+            if silence:
+                eventpoint["_ditto_silence"] = True
+            eventpoint.update(**textevent)
+            self.parent.put_audio_frame(frame, eventpoint)
+
+        def feed_frame(frame):
+            nonlocal in_quiet
+            if _frame_rms(frame) <= quiet_rms:
+                if in_quiet:
+                    emit_frame(frame, True)
+                    return
+                quiet_frames.append(frame)
+                if len(quiet_frames) >= quiet_frames_needed:
+                    for quiet_frame in quiet_frames:
+                        emit_frame(quiet_frame, True)
+                    quiet_frames.clear()
+                    in_quiet = True
+                return
+            for quiet_frame in quiet_frames:
+                emit_frame(quiet_frame)
+            quiet_frames.clear()
+            in_quiet = False
+            emit_frame(frame)
+
         try:
             chunks = self._client.text_to_speech.stream(
                 voice_id=self._voice_id,
@@ -53,28 +94,20 @@ class ElevenLabsTTS(BaseTTS):
                     raw_frame = bytes(pcm_buffer[:frame_bytes])
                     del pcm_buffer[:frame_bytes]
                     frame = np.frombuffer(raw_frame, dtype=np.int16).astype(np.float32) / 32768.0
-                    eventpoint = {}
-                    if first:
-                        eventpoint = {"status": "start", "text": text}
-                        first = False
-                    eventpoint.update(**textevent)
-                    self.parent.put_audio_frame(frame, eventpoint)
+                    feed_frame(frame)
         except Exception:
             logger.exception("elevenlabs tts error")
             return
 
-        logger.info("elevenlabs stream/feed complete: %.4fs", time.perf_counter() - started)
         usable_bytes = len(pcm_buffer) - (len(pcm_buffer) % 2)
         if usable_bytes:
             frame = np.frombuffer(bytes(pcm_buffer[:usable_bytes]), dtype=np.int16).astype(np.float32) / 32768.0
             frame = np.pad(frame, (0, self.chunk - len(frame)))
-            eventpoint = {}
-            if first:
-                eventpoint = {"status": "start", "text": text}
-                first = False
-            eventpoint.update(**textevent)
-            self.parent.put_audio_frame(frame, eventpoint)
+            feed_frame(frame)
+        for quiet_frame in quiet_frames:
+            emit_frame(quiet_frame)
 
+        logger.info("elevenlabs stream/feed complete: %.4fs", time.perf_counter() - started)
         self._send_silence_tail(text, textevent, final)
         self._previous_text = text
 

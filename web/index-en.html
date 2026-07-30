@@ -602,6 +602,9 @@ function renderBotBubble(el, text) {
 
 function toSpeechText(text) {
     return text
+        .replace(/^\s*[-*\u2022]\s+/, '')
+        .replace(/\r?\n\s*[-*\u2022]\s+/g, '. ')
+        .replace(/\s+-\s+(?=[A-Z])/g, '. ')
         .replace(/(?:📹\s*)?Video Walkthrough\s*:/gi, ' ')
         .replace(/(?:🗺️?\s*)?Interactive 360°?\s*Tour(?:\s*\(powered by Airsquire\))?\s*:/gi, ' ')
         .replace(VIDEO_URL_RE, ' ')
