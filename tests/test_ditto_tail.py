@@ -22,9 +22,15 @@ def test_tail_batches_match_audio_duration():
 
     assert "self._frame_keep.put(i < keep_frames)" in source
     assert "if not keep_frame:" in source
-    assert "if in_speech:" in source
+    # Audio is bound to its frame when the frame is generated, and the pump only
+    # ever plays the audio carried by the frame it is showing. Draining the two
+    # from separate queues slips 40ms every time either side starves.
+    assert "self._ditto_frames.put((frame_bgr, _take_audio_pair(self._audio_out)))" in source
+    assert "audio_delay.extend(frame_audio)" in source
+    assert "self._audio_out.get_nowait()" not in source.split("def _pump")[1]
     assert "if in_speech and got_ditto:" not in source
-    assert "return not self._audio_out.empty()" in source
+    # Idle only once the SDK owes no frames AND nothing is left to play.
+    assert "return not self._audio_out.empty() or not self._ditto_frames.empty()" in source
     assert 'DITTO_HOLD", "0.10"' in source
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
@@ -33,6 +39,31 @@ def test_tail_batches_match_audio_duration():
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
+
+
+def test_alignment_flush_lands_on_sdk_batch_boundary():
+    """An utterance must never strand half a 10-frame batch inside the SDK."""
+    source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    function = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_alignment_flush_chunks"
+    )
+    namespace = {}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<align>", "exec"), namespace)
+    flush = namespace["_alignment_flush_chunks"]
+
+    assert flush(2, 10, 5) == 0      # already on a boundary → no padding
+    assert flush(3, 10, 5) == 1      # 15 frames fed, 5 stranded → one chunk
+    for run_chunks in range(200):
+        pad = flush(run_chunks, 10, 5)
+        assert pad <= 1, "padding must never exceed one batch"
+        assert (run_chunks + pad) * 5 % 10 == 0, "utterance still strands a half batch"
+
+    # padding frames must be discarded, never paired with real audio
+    assert "keep_frames=0)" in source
 
 
 def test_tts_silence_tail_marks_only_its_final_frame():

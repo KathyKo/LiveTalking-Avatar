@@ -53,6 +53,7 @@ import time
 import queue
 import numpy as np
 import cv2
+from collections import deque
 from queue import Queue
 from threading import Thread, Event
 
@@ -83,6 +84,23 @@ def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
     remaining = max(0, (audio_chunks + 1) // 2 - scheduled_frames)
     return [min(batch_frames, remaining - i)
             for i in range(0, remaining, batch_frames)]
+
+
+def _take_audio_pair(audio_queue):
+    """The 40ms of speech that drove this frame — 2 x 20ms packets, in order.
+
+    Upstream feeds run_chunk a 10-frame window (3 left ctx + 5 valid + 2 right)
+    and emits the middle 5, so generated frame n lines up with audio frame n
+    exactly. Binding the pair here, at generation time, is what keeps that
+    alignment: draining audio and video from separate queues during playback
+    slips a frame every time either side starves, and never recovers."""
+    pair = []
+    for _ in range(_AUDIO_CHUNKS_PER_FRAME):
+        try:
+            pair.append(audio_queue.get_nowait())
+        except queue.Empty:
+            pair.append((None, {}))     # past the end of real speech
+    return pair
 
 
 def _alignment_flush_chunks(run_chunks, valid_clip_len, frames_per_chunk=5):
@@ -200,8 +218,8 @@ class DittoReal(BaseAvatar):
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
 
-        self._ditto_frames: "Queue" = Queue()  # BGR frames out of Ditto
-        self._audio_out: "Queue" = Queue()      # (float32[320], userdata) in feed order
+        self._ditto_frames: "Queue" = Queue()  # (BGR frame, [(pcm, userdata) x2]) ready to play
+        self._audio_out: "Queue" = Queue()      # (float32[320], userdata) awaiting its frame
         self._frame_keep: "Queue" = Queue()     # real audio frame=True, padded tail=False
         self._prof = bool(os.environ.get("DITTO_PROF"))
         self._prof_t0 = self._prof_last = time.perf_counter()
@@ -253,9 +271,10 @@ class DittoReal(BaseAvatar):
         return " ".join(parts)
 
     def _speech_pending(self):
-        # Playback state follows real audio, not the profiling counters. Tail
-        # padding can leave those counters nonzero after all output is drained.
-        return not self._audio_out.empty()
+        # Real playback state, not the profiling counters (tail padding leaves
+        # those nonzero forever): audio still waiting for its frame means the
+        # SDK owes us output, and queued frames still have to be shown.
+        return not self._audio_out.empty() or not self._ditto_frames.empty()
 
     def _prof_log(self, force=False):
         if not self._prof:
@@ -412,7 +431,9 @@ class DittoReal(BaseAvatar):
         frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
         if self._dbg and self._dbg_writer_saved < self._dbg_n:
             self._dbg_dump_writer(frame_bgr)
-        self._ditto_frames.put(frame_bgr)
+        # Bind this frame to the audio that drove it, so playback can never
+        # slip the two apart (see _take_audio_pair).
+        self._ditto_frames.put((frame_bgr, _take_audio_pair(self._audio_out)))
         self._prof_log()
 
     # ── Diagnostics (DITTO_DEBUG=1) ─────────────────────────────────────────
@@ -500,23 +521,25 @@ class DittoReal(BaseAvatar):
         in_speech = False
         _HOLD = float(os.environ.get("DITTO_HOLD", "0.10"))
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
-        # Positive offset makes the video lead the audio. A single video frame
-        # is 40ms, while audio packets are 20ms.
+        # Frame/audio pairing is exact by construction, so this stays 0 unless a
+        # specific display/browser needs calibrating. Positive = video leads audio.
         _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "0")) / 20.0)))
-        audio_delay_left = 0
+        audio_delay = deque()
         dbg_pump_saved = 0
 
         target = time.perf_counter()
         while not quit_event.is_set():
             now = time.perf_counter()
             got_ditto = False
+            frame_audio = None
             try:
                 if not in_speech and self._ditto_frames.qsize() < _START_BUFFER:
                     raise queue.Empty
-                current_frame = self._ditto_frames.get_nowait()
+                current_frame, frame_audio = self._ditto_frames.get_nowait()
                 got_ditto = True
                 if not in_speech:
-                    audio_delay_left = _AUDIO_DELAY_CHUNKS
+                    audio_delay.clear()
+                    audio_delay.extend([(None, {})] * _AUDIO_DELAY_CHUNKS)
                 in_speech = True
                 self.speaking = True
                 last_ditto_t = now
@@ -536,7 +559,7 @@ class DittoReal(BaseAvatar):
                 if in_speech and not self._speech_pending() and (now - last_ditto_t) > _HOLD:
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
-                    audio_delay_left = 0
+                    audio_delay.clear()
                     logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
@@ -551,19 +574,14 @@ class DittoReal(BaseAvatar):
             self.output.push_video_frame(current_frame)
             self.record_video_data(current_frame)
 
+            # Play exactly the audio bound to this frame. Holding a frame or
+            # sitting idle emits silence instead of stealing the next frame's
+            # audio, so the two can never drift apart.
+            if frame_audio:
+                audio_delay.extend(frame_audio)
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
-                if in_speech:
-                    if audio_delay_left:
-                        audio_delay_left -= 1
-                        pcm, ud = _SILENCE, {}
-                    else:
-                        try:
-                            a, ud = self._audio_out.get_nowait()
-                            pcm = (a * 32767).astype(np.int16)
-                        except queue.Empty:
-                            pcm, ud = _SILENCE, {}
-                else:
-                    pcm, ud = _SILENCE, {}
+                a, ud = audio_delay.popleft() if audio_delay else (None, {})
+                pcm = _SILENCE if a is None else (a * 32767).astype(np.int16)
                 self.output.push_audio_frame(pcm, ud)
                 self.record_audio_data(pcm)
 

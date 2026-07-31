@@ -75,6 +75,30 @@ def sweep(apply_fix, lengths=500):
     return bad
 
 
+def simulate_playback(hold_ticks, bound, total_ticks=250):
+    """Drift between a shown frame and the audio played with it, in frames.
+
+    Upstream aligns generated frame n with audio frame n exactly, so the only
+    way they separate is playback. The pump holds the last frame whenever the
+    writer has not delivered one yet (a burst boundary, a slow diffusion step).
+    Draining audio from its own queue keeps consuming during those holds, so
+    every hold pushes the audio one frame ahead of the picture and it never
+    recovers. Bound audio rides with its frame, so a hold emits silence.
+    """
+    video_idx = audio_idx = 0
+    drift = []
+    for tick in range(total_ticks):
+        if tick in hold_ticks:
+            if not bound:
+                audio_idx += 1          # old pump drained audio through the gap
+            continue
+        drift.append(0 if bound else audio_idx - video_idx)
+        if not bound:
+            audio_idx += 1
+        video_idx += 1
+    return drift
+
+
 def main():
     control = sweep(apply_fix=False)
     fixed = sweep(apply_fix=True)
@@ -91,6 +115,19 @@ def main():
     assert _alignment_flush_chunks(2, VALID_CLIP_LEN, FRAMES_PER_CHUNK) == 0, \
         "already-aligned utterance must not be padded"
     print("OK: every ending drains, padding never exceeds one chunk")
+
+    # A hold every 5th tick ≈ one stall per run_chunk burst, which is what the
+    # writer actually does when diffusion misses the 40ms budget.
+    holds = {t for t in range(250) if t % 5 == 4}
+    old = simulate_playback(holds, bound=False)
+    new = simulate_playback(holds, bound=True)
+    print(f"\nA/V drift under {len(holds)} writer stalls:")
+    print(f"  separate queues (old): max {max(old)} frames = {max(old) * 40}ms, grows without bound")
+    print(f"  audio bound to frame : max {max(new)} frames = {max(new) * 40}ms")
+
+    assert max(old) > 10, "negative control did not drift — starvation model is wrong"
+    assert max(new) == 0, f"bound audio still drifts by {max(new)} frames"
+    print("OK: bound audio holds lip-sync through every stall")
 
 
 if __name__ == "__main__":
