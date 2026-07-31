@@ -21,7 +21,7 @@ SRC = pathlib.Path(__file__).resolve().parent.parent / "avatars" / "ditto_avatar
 # Pull the real constants + pure helpers out of the adapter, no side effects.
 _WANT_FUNCS = {
     "_tail_frame_counts", "_alignment_flush_chunks",
-    "_normalize_source_lips", "_offset_delays",
+    "_normalize_source_lips", "_normalize_condition_lips", "_offset_delays",
 }
 _WANT_CONSTS = {
     "_CHUNKSIZE", "_PREPAD", "_SPLIT_LEN", "_HOP", "_LIP_KEYPOINTS",
@@ -37,6 +37,7 @@ for node in _tree.body:
 _tail_frame_counts = _ns["_tail_frame_counts"]
 _alignment_flush_chunks = _ns["_alignment_flush_chunks"]
 _normalize_source_lips = _ns["_normalize_source_lips"]
+_normalize_condition_lips = _ns["_normalize_condition_lips"]
 _offset_delays = _ns["_offset_delays"]
 LIP_KEYPOINTS = _ns["_LIP_KEYPOINTS"]
 CHUNKSIZE, PREPAD, SPLIT_LEN, HOP = (
@@ -151,7 +152,22 @@ def main():
     assert _offset_delays(60) == (3, 0)
     assert _offset_delays(-80) == (0, 2)
     assert _offset_delays(0) == (0, 0)
-    print("OK: source lip normalization preserves non-lip motion; signed offset is directional")
+    condition = np.arange(265, dtype=np.float32).reshape(1, 265)
+    normalized = _normalize_condition_lips(condition, neutral)
+    assert np.array_equal(normalized[..., :-63], condition[..., :-63])
+    assert np.array_equal(
+        normalized[..., -63:].reshape(1, 21, 3)[:, lip],
+        neutral.reshape(1, 21, 3)[:, lip])
+    assert np.array_equal(
+        normalized[..., -63:].reshape(1, 21, 3)[:, other],
+        condition[..., -63:].reshape(1, 21, 3)[:, other])
+    print("OK: source/model lip normalization preserves non-lip motion; signed offset is directional")
+
+    pending = feed_cap = 20
+    silence = np.zeros(CHUNK_SAMPLES, dtype=np.float32)
+    assert pending >= feed_cap
+    assert not (np.any(silence) and pending >= feed_cap)
+    print("OK: terminal silence bypasses backpressure and can flush the final batch")
 
 
 if __name__ == "__main__":

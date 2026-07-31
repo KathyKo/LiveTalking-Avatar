@@ -127,6 +127,15 @@ def _normalize_source_lips(source_infos, neutral_exp):
     return len(source_infos)
 
 
+def _normalize_condition_lips(condition, neutral_exp):
+    """Replace lip rows in Ditto's existing 265-d source condition."""
+    result = np.array(condition, copy=True)
+    exp = result[..., -63:].reshape(*result.shape[:-1], 21, 3)
+    neutral_lips = np.asarray(neutral_exp).reshape(21, 3)[list(_LIP_KEYPOINTS)]
+    exp[..., list(_LIP_KEYPOINTS), :] = neutral_lips
+    return result
+
+
 def _offset_delays(offset_ms):
     """Return (20ms audio chunks, 40ms video frames) to delay."""
     return (
@@ -353,18 +362,20 @@ class DittoReal(BaseAvatar):
             self._utt_show_pending = True
         if self._muted:
             return
+        a = np.asarray(audio_chunk, dtype=np.float32)
         # Backpressure: block the TTS feed while the SDK is >_feed_cap frames ahead,
         # so the SDK backlog (and thus interrupt latency) stays bounded. Bails if a
-        # flush bumps the epoch or we're shutting down.
-        while (self._prof_expected_frames - self._prof_frames_out
-               - self._prof_frames_drop) >= self._feed_cap:
+        # flush bumps the epoch or we're shutting down. Silence must pass through:
+        # it completes Ditto's final model batch, so blocking it here deadlocks the
+        # final marker behind the frames that only that silence can generate.
+        while (np.any(a) and self._prof_expected_frames - self._prof_frames_out
+               - self._prof_frames_drop >= self._feed_cap):
             if self._feed_epoch != epoch or (getattr(self, 'quit_event', None) is not None
                                              and self.quit_event.is_set()):
                 return
             time.sleep(0.008)
         if self._feed_epoch != epoch:
             return
-        a = np.asarray(audio_chunk, dtype=np.float32)
         if self._utt_active:
             self._utt_audio_chunks += 1
         self._prof_audio_chunks += 1
@@ -383,6 +394,7 @@ class DittoReal(BaseAvatar):
         # end of an utterance: pad-and-flush the tail so all speech gets frames,
         # then reset — otherwise leftover audio drifts into the next utterance.
         if datainfo.get('status') == 'end':
+            logger.info("ditto final audio received: flushing tail")
             self._flush_tail()
             self._utt_active = False
 
@@ -590,18 +602,10 @@ class DittoReal(BaseAvatar):
             )
             count = _normalize_source_lips(
                 self.sdk.source_info["x_s_info_lst"], neutral["x_s_info"]["exp"])
-            source_info = self.sdk.source_info["x_s_info_lst"][0]
             audio2motion = self.sdk.audio2motion
-            audio2motion.setup(
-                source_info,
-                overlap_v2=audio2motion.overlap_v2,
-                fix_kp_cond=audio2motion.fix_kp_cond,
-                fix_kp_cond_dim=audio2motion.fix_kp_cond_dim,
-                sampling_timesteps=audio2motion.sampling_timesteps,
-                online_mode=audio2motion.online_mode,
-                v_min_max_for_clip=audio2motion.v_min_max_for_clip,
-                smo_k_d=audio2motion.smo_k_d,
-            )
+            for name in ("s_kp_cond", "kp_cond"):
+                setattr(audio2motion, name, _normalize_condition_lips(
+                    getattr(audio2motion, name), neutral["x_s_info"]["exp"]))
             logger.info("ditto neutral lips: applied idle mouth baseline to %d source frames",
                         count)
         except Exception:
@@ -622,6 +626,7 @@ class DittoReal(BaseAvatar):
         # zero, while a measured fixed display/model offset can be compensated.
         _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "0"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
+        _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
         audio_delay = deque()
         video_delay = deque()
         dbg_pump_saved = 0
@@ -669,8 +674,8 @@ class DittoReal(BaseAvatar):
                     current_frame = video_delay.popleft()
                     got_ditto = True
                     last_ditto_t = now
-                elif (in_speech and not self._speech_pending() and not audio_delay
-                      and (now - last_ditto_t) > _HOLD):
+                elif (in_speech and not self._speech_pending()
+                      and (now - last_ditto_t) > _END_HOLD):
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
                     audio_delay.clear()

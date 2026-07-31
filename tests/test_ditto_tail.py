@@ -35,6 +35,12 @@ def test_tail_batches_match_audio_duration():
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "cv2.addWeighted" not in source
+    assert "and not audio_delay" not in source
+    assert "_END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)" in source
+    assert "while (np.any(a) and" in source
+    assert "ditto final audio received: flushing tail" in source
+    neutralize = source.split("def _neutralize_source_lips", 1)[1].split("def _pump", 1)[0]
+    assert "audio2motion.setup(" not in neutralize
     assert 'DITTO_AV_OFFSET_MS", "0"' in source
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
