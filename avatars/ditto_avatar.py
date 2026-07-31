@@ -558,7 +558,13 @@ class DittoReal(BaseAvatar):
             got_ditto = False
             frame_audio = None
             try:
-                if not in_speech and self._ditto_frames.qsize() < _START_BUFFER:
+                # Only wait for the cushion while the SDK still has audio to turn
+                # into frames. Once it owes nothing, a short tail would never
+                # reach _START_BUFFER, and holding it back deadlocks the return
+                # to idle: the frames stay queued, so _speech_pending() is
+                # permanently true and the pump never leaves speech.
+                if (not in_speech and self._ditto_frames.qsize() < _START_BUFFER
+                        and not self._audio_out.empty()):
                     raise queue.Empty
                 current_frame, frame_audio = self._ditto_frames.get_nowait()
                 got_ditto = True
