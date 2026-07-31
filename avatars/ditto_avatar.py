@@ -30,6 +30,8 @@
 #                      Ditto is generating or just replaying the source video).
 #     DITTO_DEBUG_DIR  where to dump (default /tmp/ditto_debug)
 #     DITTO_DEBUG_N    how many writer frames to dump/compare (default 20)
+#     DITTO_NEUTRAL_LIPS  prevent source-video lip motion from leaking into the
+#                         audio-driven mouth (default 1; set 0 to compare)
 #
 #  Mouth/expression shaping (Ditto setup params — all opt-in; unset = baseline):
 #     DITTO_EMO        emotion index (default 4; 0 = neutral)
@@ -69,6 +71,7 @@ if _DITTO_REPO not in sys.path:
 # hardwired to 25fps in server/webrtc.py, so this ratio is fixed.
 _AUDIO_CHUNKS_PER_FRAME = 2
 _SILENCE = np.zeros(320, dtype=np.int16)
+_LIP_KEYPOINTS = (6, 12, 14, 17, 19, 20)
 
 # hubert sliding window, copied from ditto's inference.py (chunksize=(3,5,2)):
 #   prepad 3*640 zeros, window = sum(chunksize)*0.04*16k + 80 = 6480,
@@ -112,6 +115,24 @@ def _alignment_flush_chunks(run_chunks, valid_clip_len, frames_per_chunk=5):
     audio stays queued, playback freezes on the final frame."""
     pending = run_chunks * frames_per_chunk % valid_clip_len
     return 0 if pending == 0 else (valid_clip_len - pending + frames_per_chunk - 1) // frames_per_chunk
+
+
+def _normalize_source_lips(source_infos, neutral_exp):
+    """Replace only source lip motion; preserve its head, eyes and body motion."""
+    neutral_lips = np.asarray(neutral_exp).reshape(-1, 3)[list(_LIP_KEYPOINTS)]
+    for info in source_infos:
+        exp = np.array(info["exp"], copy=True)
+        exp.reshape(-1, 3)[list(_LIP_KEYPOINTS)] = neutral_lips
+        info["exp"] = exp
+    return len(source_infos)
+
+
+def _offset_delays(offset_ms):
+    """Return (20ms audio chunks, 40ms video frames) to delay."""
+    return (
+        max(0, int(round(float(offset_ms) / 20.0))),
+        max(0, int(round(-float(offset_ms) / 40.0))),
+    )
 
 
 def load_model():
@@ -265,6 +286,7 @@ class DittoReal(BaseAvatar):
         self._sync_csv = os.environ.get("DITTO_SYNC_CSV")
         self._sync_fh = None
         self._sync_n = 0
+        self._sync_warned = False
 
     def _sdk_queue_sizes(self):
         parts = []
@@ -446,8 +468,8 @@ class DittoReal(BaseAvatar):
     def _sync_log(self, frame_bgr, frame_audio):
         """One row per shown frame: audio loudness vs mouth openness.
 
-        The mouth cavity is dark when open, so the darkness of the lower-centre
-        ROI tracks aperture well enough to correlate against speech energy."""
+        DITTO_SYNC_CSV is diagnostic-only: use Ditto's already-loaded face mesh
+        and normalized inner-lip distance instead of a framing-dependent ROI."""
         if self._sync_fh is None:
             self._sync_fh = open(self._sync_csv, "w", buffering=1)
             self._sync_fh.write("frame,audio_rms,mouth_open\n")
@@ -455,10 +477,21 @@ class DittoReal(BaseAvatar):
         for a, _ in (frame_audio or []):
             if a is not None:
                 rms = max(rms, float(np.sqrt(np.mean(np.square(a)))))
-        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
-        h, w = gray.shape
-        roi = gray[int(h * 0.60):int(h * 0.92), int(w * 0.33):int(w * 0.67)]
-        self._sync_fh.write(f"{self._sync_n},{rms:.6f},{255.0 - float(np.mean(roi)):.3f}\n")
+        mouth_open = float("nan")
+        try:
+            mesh = self.sdk.avatar_registrar.source2info.landmark478(
+                cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)).reshape(-1, 3)
+            h, w = frame_bgr.shape[:2]
+            xy = mesh[:, :2] * np.array([w, h], dtype=np.float32)
+            mouth_width = float(np.linalg.norm(xy[61] - xy[291]))
+            if mouth_width > 1e-6:
+                mouth_open = float(
+                    np.linalg.norm(xy[13] - xy[14]) / mouth_width)
+        except Exception as exc:
+            if not self._sync_warned:
+                self._sync_warned = True
+                logger.warning("ditto sync mouth landmark failed: %s", exc)
+        self._sync_fh.write(f"{self._sync_n},{rms:.6f},{mouth_open:.6f}\n")
         self._sync_n += 1
 
     # ── Diagnostics (DITTO_DEBUG=1) ─────────────────────────────────────────
@@ -535,6 +568,45 @@ class DittoReal(BaseAvatar):
         return [cv2.cvtColor(np.asarray(f), cv2.COLOR_RGB2BGR)
                 for f in self.sdk.source_info["img_rgb_lst"]]
 
+    def _neutralize_source_lips(self):
+        """Use idle.mp4's closed mouth as the source-video lip baseline."""
+        if os.environ.get("DITTO_NEUTRAL_LIPS", "1").lower() in {"0", "false", "no"}:
+            return
+        idle_path = os.path.join(os.path.dirname(self.source_path), "idle.mp4")
+        cap = cv2.VideoCapture(idle_path)
+        ok, idle_bgr = cap.read()
+        cap.release()
+        if not ok:
+            logger.warning("ditto neutral lips skipped: cannot read %s", idle_path)
+            return
+        try:
+            source2info = self.sdk.avatar_registrar.source2info
+            neutral = source2info(
+                cv2.cvtColor(idle_bgr, cv2.COLOR_BGR2RGB),
+                crop_scale=self.sdk.crop_scale,
+                crop_vx_ratio=self.sdk.crop_vx_ratio,
+                crop_vy_ratio=self.sdk.crop_vy_ratio,
+                crop_flag_do_rot=self.sdk.crop_flag_do_rot,
+            )
+            count = _normalize_source_lips(
+                self.sdk.source_info["x_s_info_lst"], neutral["x_s_info"]["exp"])
+            source_info = self.sdk.source_info["x_s_info_lst"][0]
+            audio2motion = self.sdk.audio2motion
+            audio2motion.setup(
+                source_info,
+                overlap_v2=audio2motion.overlap_v2,
+                fix_kp_cond=audio2motion.fix_kp_cond,
+                fix_kp_cond_dim=audio2motion.fix_kp_cond_dim,
+                sampling_timesteps=audio2motion.sampling_timesteps,
+                online_mode=audio2motion.online_mode,
+                v_min_max_for_clip=audio2motion.v_min_max_for_clip,
+                smo_k_d=audio2motion.smo_k_d,
+            )
+            logger.info("ditto neutral lips: applied idle mouth baseline to %d source frames",
+                        count)
+        except Exception:
+            logger.exception("ditto neutral lips skipped")
+
     def _pump(self, quit_event: Event):
         # idle:   cycle source frames (smooth animation before/after speech)
         # speech: show Ditto frames; hold last when queue briefly empty (no flicker)
@@ -546,10 +618,12 @@ class DittoReal(BaseAvatar):
         in_speech = False
         _HOLD = float(os.environ.get("DITTO_HOLD", "0.10"))
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
-        # Frame/audio pairing is exact by construction, so this stays 0 unless a
-        # specific display/browser needs calibrating. Positive = video leads audio.
-        _AUDIO_DELAY_CHUNKS = max(0, int(round(float(os.environ.get("DITTO_AV_OFFSET_MS", "0")) / 20.0)))
+        # Positive delays audio; negative delays video. Pairing remains exact at
+        # zero, while a measured fixed display/model offset can be compensated.
+        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "0"))
+        _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         audio_delay = deque()
+        video_delay = deque()
         dbg_pump_saved = 0
 
         target = time.perf_counter()
@@ -566,15 +640,19 @@ class DittoReal(BaseAvatar):
                 if (not in_speech and self._ditto_frames.qsize() < _START_BUFFER
                         and not self._audio_out.empty()):
                     raise queue.Empty
-                current_frame, frame_audio = self._ditto_frames.get_nowait()
+                generated_frame, frame_audio = self._ditto_frames.get_nowait()
                 got_ditto = True
                 if not in_speech:
                     audio_delay.clear()
                     audio_delay.extend([(None, {})] * _AUDIO_DELAY_CHUNKS)
+                    video_delay.clear()
                 in_speech = True
                 self.speaking = True
                 last_ditto_t = now
                 self._prof_frames_used += 1
+                video_delay.append(generated_frame)
+                if len(video_delay) > _VIDEO_DELAY_FRAMES:
+                    current_frame = video_delay.popleft()
                 if self._utt_show_pending:
                     self._utt_show_pending = False
                     self._avatar_start_seq += 1
@@ -587,10 +665,16 @@ class DittoReal(BaseAvatar):
                                 f"pump_ditto_{dbg_pump_saved:04d}.jpg"), current_frame)
                     dbg_pump_saved += 1
             except queue.Empty:
-                if in_speech and not self._speech_pending() and (now - last_ditto_t) > _HOLD:
+                if in_speech and video_delay:
+                    current_frame = video_delay.popleft()
+                    got_ditto = True
+                    last_ditto_t = now
+                elif (in_speech and not self._speech_pending() and not audio_delay
+                      and (now - last_ditto_t) > _HOLD):
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
                     audio_delay.clear()
+                    video_delay.clear()
                     logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
@@ -607,7 +691,7 @@ class DittoReal(BaseAvatar):
 
             # Measure what was actually shown against what was actually heard,
             # so lip-sync is a number instead of an opinion (DITTO_SYNC_CSV).
-            if self._sync_csv and got_ditto:
+            if self._sync_csv and in_speech:
                 self._sync_log(current_frame, frame_audio)
 
             # Play exactly the audio bound to this frame. Holding a frame or
@@ -681,6 +765,7 @@ class DittoReal(BaseAvatar):
         self.sdk.setup(self.source_path, f"/tmp/ditto_{self.opt.sessionid}.mp4",
                        **setup_kwargs)
         logger.info("[ditto-timing] sdk.setup (source processing): %.2fs", time.perf_counter() - _t)
+        self._neutralize_source_lips()
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:

@@ -14,14 +14,20 @@ the negative control (fix disabled) next to the fixed pipeline.
 
 import ast
 import pathlib
+import numpy as np
 
 SRC = pathlib.Path(__file__).resolve().parent.parent / "avatars" / "ditto_avatar.py"
 
 # Pull the real constants + pure helpers out of the adapter, no side effects.
-_WANT_FUNCS = {"_tail_frame_counts", "_alignment_flush_chunks"}
-_WANT_CONSTS = {"_CHUNKSIZE", "_PREPAD", "_SPLIT_LEN", "_HOP"}
+_WANT_FUNCS = {
+    "_tail_frame_counts", "_alignment_flush_chunks",
+    "_normalize_source_lips", "_offset_delays",
+}
+_WANT_CONSTS = {
+    "_CHUNKSIZE", "_PREPAD", "_SPLIT_LEN", "_HOP", "_LIP_KEYPOINTS",
+}
 _tree = ast.parse(SRC.read_text(encoding="utf-8"))
-_ns = {}
+_ns = {"np": np}
 for node in _tree.body:
     if isinstance(node, ast.FunctionDef) and node.name in _WANT_FUNCS:
         exec(compile(ast.Module([node], []), str(SRC), "exec"), _ns)
@@ -30,6 +36,9 @@ for node in _tree.body:
 
 _tail_frame_counts = _ns["_tail_frame_counts"]
 _alignment_flush_chunks = _ns["_alignment_flush_chunks"]
+_normalize_source_lips = _ns["_normalize_source_lips"]
+_offset_delays = _ns["_offset_delays"]
+LIP_KEYPOINTS = _ns["_LIP_KEYPOINTS"]
 CHUNKSIZE, PREPAD, SPLIT_LEN, HOP = (
     _ns["_CHUNKSIZE"], _ns["_PREPAD"], _ns["_SPLIT_LEN"], _ns["_HOP"])
 FRAMES_PER_CHUNK = CHUNKSIZE[1]
@@ -128,6 +137,21 @@ def main():
     assert max(old) > 10, "negative control did not drift — starvation model is wrong"
     assert max(new) == 0, f"bound audio still drifts by {max(new)} frames"
     print("OK: bound audio holds lip-sync through every stall")
+
+    source = np.arange(63, dtype=np.float32).reshape(1, 63)
+    neutral = (1000 + np.arange(63, dtype=np.float32)).reshape(1, 63)
+    infos = [{"exp": source.copy()} for _ in range(3)]
+    _normalize_source_lips(infos, neutral)
+    lip = np.array(LIP_KEYPOINTS)
+    other = np.array([i for i in range(21) if i not in LIP_KEYPOINTS])
+    for info in infos:
+        exp = info["exp"].reshape(21, 3)
+        assert np.array_equal(exp[lip], neutral.reshape(21, 3)[lip])
+        assert np.array_equal(exp[other], source.reshape(21, 3)[other])
+    assert _offset_delays(60) == (3, 0)
+    assert _offset_delays(-80) == (0, 2)
+    assert _offset_delays(0) == (0, 0)
+    print("OK: source lip normalization preserves non-lip motion; signed offset is directional")
 
 
 if __name__ == "__main__":
