@@ -36,6 +36,7 @@ done
 ln -sfn "$DATA_ROOT" "$APP_ROOT/data"
 
 JUPYTER_TOKEN=${JUPYTER_TOKEN:-$(python -c 'import secrets; print(secrets.token_urlsafe(24))')}
+echo "=== livetalking-avatar build ${BUILD_SHA:-unknown} ==="
 echo "JupyterLab: http://<pod-host>:8888/?token=$JUPYTER_TOKEN"
 jupyter lab \
     --allow-root \

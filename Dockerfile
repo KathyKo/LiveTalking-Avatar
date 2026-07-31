@@ -50,6 +50,10 @@ print("TensorRT", trt.__version__)
 print("ONNX Runtime", ort.__version__, ort.get_available_providers())
 PY
 
+# Stamped by CI so the running container can prove which commit it is.
+ARG BUILD_SHA=dev
+ENV BUILD_SHA=${BUILD_SHA}
+
 EXPOSE 8010 8888
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10m --retries=3 \

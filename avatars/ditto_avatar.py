@@ -259,6 +259,13 @@ class DittoReal(BaseAvatar):
         self._dbg_src_bgr = []
         self._dbg_src_small = []
 
+        # DITTO_SYNC_CSV=/path.csv → per shown frame: how loud the audio bound to
+        # it was, and how open the mouth in it was. Cross-correlating the two
+        # columns gives the real A/V offset in frames (scripts/ditto_sync_report.py).
+        self._sync_csv = os.environ.get("DITTO_SYNC_CSV")
+        self._sync_fh = None
+        self._sync_n = 0
+
     def _sdk_queue_sizes(self):
         parts = []
         for name, obj in vars(self.sdk).items():
@@ -436,6 +443,24 @@ class DittoReal(BaseAvatar):
         self._ditto_frames.put((frame_bgr, _take_audio_pair(self._audio_out)))
         self._prof_log()
 
+    def _sync_log(self, frame_bgr, frame_audio):
+        """One row per shown frame: audio loudness vs mouth openness.
+
+        The mouth cavity is dark when open, so the darkness of the lower-centre
+        ROI tracks aperture well enough to correlate against speech energy."""
+        if self._sync_fh is None:
+            self._sync_fh = open(self._sync_csv, "w", buffering=1)
+            self._sync_fh.write("frame,audio_rms,mouth_open\n")
+        rms = 0.0
+        for a, _ in (frame_audio or []):
+            if a is not None:
+                rms = max(rms, float(np.sqrt(np.mean(np.square(a)))))
+        gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+        h, w = gray.shape
+        roi = gray[int(h * 0.60):int(h * 0.92), int(w * 0.33):int(w * 0.67)]
+        self._sync_fh.write(f"{self._sync_n},{rms:.6f},{255.0 - float(np.mean(roi)):.3f}\n")
+        self._sync_n += 1
+
     # ── Diagnostics (DITTO_DEBUG=1) ─────────────────────────────────────────
     # Proves whether Ditto is GENERATING or just replaying the source video by
     # dumping the first DITTO_DEBUG_N writer + source frames and logging diffs.
@@ -573,6 +598,11 @@ class DittoReal(BaseAvatar):
 
             self.output.push_video_frame(current_frame)
             self.record_video_data(current_frame)
+
+            # Measure what was actually shown against what was actually heard,
+            # so lip-sync is a number instead of an opinion (DITTO_SYNC_CSV).
+            if self._sync_csv and got_ditto:
+                self._sync_log(current_frame, frame_audio)
 
             # Play exactly the audio bound to this frame. Holding a frame or
             # sitting idle emits silence instead of stealing the next frame's
