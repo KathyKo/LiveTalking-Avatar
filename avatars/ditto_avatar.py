@@ -85,6 +85,17 @@ def _tail_frame_counts(audio_chunks, scheduled_frames, batch_frames=5):
             for i in range(0, remaining, batch_frames)]
 
 
+def _alignment_flush_chunks(run_chunks, valid_clip_len, frames_per_chunk=5):
+    """Padding chunks needed so the SDK's batch boundary lands on our last frame.
+
+    Ditto's online audio2motion only emits once it has valid_clip_len frames
+    (10 in the shipped model) but run_chunk feeds 5, so an utterance ending on
+    an odd number of chunks strands half a batch inside the SDK: no callback,
+    audio stays queued, playback freezes on the final frame."""
+    pending = run_chunks * frames_per_chunk % valid_clip_len
+    return 0 if pending == 0 else (valid_clip_len - pending + frames_per_chunk - 1) // frames_per_chunk
+
+
 def load_model():
     return {
         "cfg_pkl": os.environ.get(
@@ -336,6 +347,15 @@ class DittoReal(BaseAvatar):
                 window = np.pad(window, (0, _SPLIT_LEN - len(window)))
             self._run_chunk(window, _CHUNKSIZE, keep_frames=keep_frames)
             pos += _HOP
+        # Flush the half batch the SDK would otherwise strand (see
+        # _alignment_flush_chunks). keep_frames=0 marks every frame it generates
+        # as padding, so _on_frame drops them and playback keeps its real pairing.
+        for _ in range(_alignment_flush_chunks(
+                self._prof_run_chunks,
+                getattr(self.sdk.audio2motion, "valid_clip_len", 10),
+                _CHUNKSIZE[1])):
+            self._run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE,
+                            keep_frames=0)
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
         self._prof_log(force=True)
