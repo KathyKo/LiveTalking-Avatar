@@ -22,6 +22,7 @@ SRC = pathlib.Path(__file__).resolve().parent.parent / "avatars" / "ditto_avatar
 _WANT_FUNCS = {
     "_tail_frame_counts", "_alignment_flush_chunks",
     "_normalize_source_lips", "_normalize_condition_lips", "_offset_delays",
+    "_is_final_audio_event",
 }
 _WANT_CONSTS = {
     "_CHUNKSIZE", "_PREPAD", "_SPLIT_LEN", "_HOP", "_LIP_KEYPOINTS",
@@ -39,6 +40,7 @@ _alignment_flush_chunks = _ns["_alignment_flush_chunks"]
 _normalize_source_lips = _ns["_normalize_source_lips"]
 _normalize_condition_lips = _ns["_normalize_condition_lips"]
 _offset_delays = _ns["_offset_delays"]
+_is_final_audio_event = _ns["_is_final_audio_event"]
 LIP_KEYPOINTS = _ns["_LIP_KEYPOINTS"]
 CHUNKSIZE, PREPAD, SPLIT_LEN, HOP = (
     _ns["_CHUNKSIZE"], _ns["_PREPAD"], _ns["_SPLIT_LEN"], _ns["_HOP"])
@@ -152,6 +154,8 @@ def main():
     assert _offset_delays(60) == (3, 0)
     assert _offset_delays(-80) == (0, 2)
     assert _offset_delays(0) == (0, 0)
+    assert not _is_final_audio_event({"status": "segment_end", "final": False})
+    assert _is_final_audio_event({"status": "end", "final": True})
     condition = np.arange(265, dtype=np.float32).reshape(1, 265)
     normalized = _normalize_condition_lips(condition, neutral)
     assert np.array_equal(normalized[..., :-63], condition[..., :-63])

@@ -144,6 +144,13 @@ def _offset_delays(offset_ms):
     )
 
 
+def _is_final_audio_event(metadata):
+    """True only for the final marker, never for ordinary sentence pauses."""
+    return (isinstance(metadata, dict)
+            and metadata.get("status") == "end"
+            and metadata.get("final") is not False)
+
+
 def load_model():
     return {
         "cfg_pkl": os.environ.get(
@@ -279,6 +286,7 @@ class DittoReal(BaseAvatar):
         self._utt_active = False
         self._utt_audio_chunks = 0
         self._utt_frames_scheduled = 0
+        self._final_pending = False
 
         # ── diagnostics (DITTO_DEBUG) — prove writer frames ≠ source frames ──
         self._dbg = bool(os.environ.get("DITTO_DEBUG"))
@@ -395,6 +403,7 @@ class DittoReal(BaseAvatar):
         # then reset — otherwise leftover audio drifts into the next utterance.
         if datainfo.get('status') == 'end':
             logger.info("ditto final audio received: flushing tail")
+            self._final_pending = True
             self._flush_tail()
             self._utt_active = False
 
@@ -435,6 +444,7 @@ class DittoReal(BaseAvatar):
         self._utt_active = False
         self._utt_audio_chunks = 0
         self._utt_frames_scheduled = 0
+        self._final_pending = False
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
@@ -627,8 +637,10 @@ class DittoReal(BaseAvatar):
         _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "0"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
+        _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "500")) / 1000.0)
         audio_delay = deque()
         video_delay = deque()
+        final_idle_at = None
         dbg_pump_saved = 0
 
         target = time.perf_counter()
@@ -636,7 +648,21 @@ class DittoReal(BaseAvatar):
             now = time.perf_counter()
             got_ditto = False
             frame_audio = None
+            force_idle_tick = False
+            if final_idle_at is not None and now >= final_idle_at:
+                _drain_queue(self._audio_out)
+                _drain_queue(self._ditto_frames)
+                audio_delay.clear()
+                video_delay.clear()
+                final_idle_at = None
+                self._final_pending = False
+                in_speech = False
+                self.speaking = False
+                force_idle_tick = True
+                logger.info("ditto pump: final hold complete -> idle")
             try:
+                if force_idle_tick or final_idle_at is not None:
+                    raise queue.Empty
                 # Only wait for the cushion while the SDK still has audio to turn
                 # into frames. Once it owes nothing, a short tail would never
                 # reach _START_BUFFER, and holding it back deadlocks the return
@@ -670,11 +696,14 @@ class DittoReal(BaseAvatar):
                                 f"pump_ditto_{dbg_pump_saved:04d}.jpg"), current_frame)
                     dbg_pump_saved += 1
             except queue.Empty:
-                if in_speech and video_delay:
+                if final_idle_at is not None:
+                    pass  # hold the last generated frame until the 500ms deadline
+                elif in_speech and video_delay:
                     current_frame = video_delay.popleft()
                     got_ditto = True
                     last_ditto_t = now
                 elif (in_speech and not self._speech_pending()
+                      and not self._final_pending
                       and (now - last_ditto_t) > _END_HOLD):
                     in_speech = False  # speech done, resume idle
                     self.speaking = False
@@ -704,11 +733,18 @@ class DittoReal(BaseAvatar):
             # audio, so the two can never drift apart.
             if frame_audio:
                 audio_delay.extend(frame_audio)
+            final_audio_played = False
             for _ in range(_AUDIO_CHUNKS_PER_FRAME):
                 a, ud = audio_delay.popleft() if audio_delay else (None, {})
                 pcm = _SILENCE if a is None else (a * 32767).astype(np.int16)
                 self.output.push_audio_frame(pcm, ud)
                 self.record_audio_data(pcm)
+                final_audio_played = final_audio_played or _is_final_audio_event(ud)
+            if final_audio_played:
+                self._final_pending = False
+                final_idle_at = time.perf_counter() + _FINAL_HOLD
+                logger.info("ditto pump: final audio played; holding last frame %.0fms",
+                            _FINAL_HOLD * 1000.0)
 
             target += 0.04
             dt = target - time.perf_counter()
