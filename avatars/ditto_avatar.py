@@ -292,6 +292,8 @@ class DittoReal(BaseAvatar):
         self._utt_audio_chunks = 0
         self._utt_frames_scheduled = 0
         self._final_pending = False
+        self._last_ditto_frame_at = time.perf_counter()
+        self._tail_audio_fallback = False
 
         # ── diagnostics (DITTO_DEBUG) — prove writer frames ≠ source frames ──
         self._dbg = bool(os.environ.get("DITTO_DEBUG"))
@@ -366,6 +368,7 @@ class DittoReal(BaseAvatar):
         epoch = self._feed_epoch
         if datainfo.get('status') == 'start' and not self._utt_active:
             self._muted = False
+            self._tail_audio_fallback = False
             self._utt_active = True
             self._utt_audio_chunks = 0
             self._utt_frames_scheduled = 0
@@ -450,6 +453,7 @@ class DittoReal(BaseAvatar):
         self._utt_audio_chunks = 0
         self._utt_frames_scheduled = 0
         self._final_pending = False
+        self._tail_audio_fallback = False
         super().flush_talk()                       # stop TTS feeding new text
         self._feat_buf = np.full(_PREPAD, 0.0, dtype=np.float32)
         self._feat_pos = 0
@@ -467,6 +471,7 @@ class DittoReal(BaseAvatar):
         frame = np.asarray(frame_rgb)
         if frame.ndim != 3:
             return
+        self._last_ditto_frame_at = time.perf_counter()
         if self._drop_ditto_frames:
             self._drop_ditto_frames -= 1
             self._prof_frames_drop += 1
@@ -477,6 +482,12 @@ class DittoReal(BaseAvatar):
         except queue.Empty:
             keep_frame = True
         if not keep_frame:
+            self._prof_frames_drop += 1
+            self._prof_log()
+            return
+        # The final-audio fallback owns the tail once the SDK has stopped
+        # producing. A late callback must not steal those audio packets again.
+        if self._tail_audio_fallback:
             self._prof_frames_drop += 1
             self._prof_log()
             return
@@ -708,6 +719,14 @@ class DittoReal(BaseAvatar):
                     current_frame = video_delay.popleft()
                     got_ditto = True
                     last_ditto_t = now
+                elif (in_speech and self._final_pending and not self._utt_active
+                      and not self._audio_out.empty()
+                      and self._ditto_frames.empty()
+                      and (now - self._last_ditto_frame_at) >= 0.5):
+                    if not self._tail_audio_fallback:
+                        self._tail_audio_fallback = True
+                        logger.info("ditto pump: SDK tail stalled; draining final audio")
+                    frame_audio = _take_audio_pair(self._audio_out)
                 elif (in_speech and not self._speech_pending()
                       and not self._final_pending
                       and (now - last_ditto_t) > _END_HOLD):

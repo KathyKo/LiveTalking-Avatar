@@ -1,5 +1,10 @@
 import ast
+import time
+from queue import Queue
+from threading import Event, Thread
 from pathlib import Path
+
+import numpy as np
 
 
 def test_tail_batches_match_audio_duration():
@@ -49,6 +54,68 @@ def test_tail_batches_match_audio_duration():
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
+    assert "SDK tail stalled; draining final audio" in source
+
+
+def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
+    from avatars.ditto_avatar import DittoReal
+
+    monkeypatch.setenv("DITTO_START_BUFFER", "1")
+    monkeypatch.setenv("DITTO_AV_OFFSET_MS", "0")
+    monkeypatch.setenv("DITTO_FINAL_HOLD_MS", "500")
+
+    events = []
+
+    class Output:
+        def push_video_frame(self, frame):
+            events.append((time.perf_counter(), "video", int(frame[0, 0, 0])))
+
+        def push_audio_frame(self, _pcm, data):
+            events.append((time.perf_counter(), "audio", data))
+
+    avatar = object.__new__(DittoReal)
+    avatar._idle_bgr = [np.zeros((2, 2, 3), dtype=np.uint8)]
+    avatar._ditto_frames = Queue()
+    avatar._audio_out = Queue()
+    avatar._ditto_frames.put((np.full((2, 2, 3), 255, dtype=np.uint8),
+                              [(None, {}), (None, {})]))
+    avatar._audio_out.put((np.ones(320, dtype=np.float32), {}))
+    avatar._audio_out.put((np.ones(320, dtype=np.float32),
+                           {"status": "end", "final": True}))
+    avatar._final_pending = True
+    avatar._utt_active = False
+    avatar._last_ditto_frame_at = time.perf_counter() - 1.0
+    avatar._tail_audio_fallback = False
+    avatar._utt_show_pending = False
+    avatar._dbg = False
+    avatar._sync_csv = None
+    avatar._prof_frames_used = avatar._prof_holds = avatar._prof_idle = 0
+    avatar.speaking = False
+    avatar.output = Output()
+    avatar.record_video_data = lambda _frame: None
+    avatar.record_audio_data = lambda _pcm: None
+    avatar._prof_log = lambda force=False: None
+
+    quit_event = Event()
+    thread = Thread(target=avatar._pump, args=(quit_event,))
+    thread.start()
+    deadline = time.perf_counter() + 1.5
+    while time.perf_counter() < deadline:
+        final = next((t for t, kind, data in events
+                      if kind == "audio" and data.get("final")), None)
+        if final is not None and any(t > final and kind == "video" and data == 0
+                                     for t, kind, data in events):
+            break
+        time.sleep(0.01)
+    quit_event.set()
+    thread.join(timeout=1.0)
+
+    final = next(t for t, kind, data in events
+                 if kind == "audio" and data.get("final"))
+    idle = next(t for t, kind, data in events
+                if t > final and kind == "video" and data == 0)
+    assert idle - final >= 0.48
+    assert not avatar._final_pending
 
 
 def test_alignment_flush_lands_on_sdk_batch_boundary():
