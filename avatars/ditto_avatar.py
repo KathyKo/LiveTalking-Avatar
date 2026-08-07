@@ -634,7 +634,7 @@ class DittoReal(BaseAvatar):
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
         # Positive delays audio; negative delays video. Pairing remains exact at
         # zero, while a measured fixed display/model offset can be compensated.
-        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "0"))
+        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "60"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
         _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "500")) / 1000.0)
@@ -744,6 +744,13 @@ class DittoReal(BaseAvatar):
                 self._final_pending = False
                 final_idle_at = time.perf_counter() + _FINAL_HOLD
                 logger.info("ditto pump: final audio played; holding last frame %.0fms",
+                            _FINAL_HOLD * 1000.0)
+            elif (self._final_pending and not self._utt_active
+                  and self._audio_out.empty() and self._ditto_frames.empty()
+                  and not audio_delay and not video_delay):
+                self._final_pending = False
+                final_idle_at = time.perf_counter() + _FINAL_HOLD
+                logger.info("ditto pump: final queues drained; holding last frame %.0fms",
                             _FINAL_HOLD * 1000.0)
 
             target += 0.04

@@ -35,7 +35,8 @@ def test_tail_batches_match_audio_duration():
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "cv2.addWeighted" not in source
-    assert "and not audio_delay" not in source
+    assert "final queues drained; holding last frame" in source
+    assert "and self._audio_out.empty() and self._ditto_frames.empty()" in source
     assert "and not self._final_pending" in source
     assert 'DITTO_FINAL_HOLD_MS", "500"' in source
     assert "final audio played; holding last frame" in source
@@ -44,7 +45,7 @@ def test_tail_batches_match_audio_duration():
     assert "ditto final audio received: flushing tail" in source
     neutralize = source.split("def _neutralize_source_lips", 1)[1].split("def _pump", 1)[0]
     assert "audio2motion.setup(" not in neutralize
-    assert 'DITTO_AV_OFFSET_MS", "0"' in source
+    assert 'DITTO_AV_OFFSET_MS", "60"' in source
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
@@ -81,3 +82,5 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     )
     assert "for index in range((pause_ms + 19) // 20):" in source
     assert "if index * 20 + 20 >= pause_ms:" in source
+    assert 'status="end" if final else "segment_end"' in source
+    assert "final=final" in source

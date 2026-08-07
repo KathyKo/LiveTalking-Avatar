@@ -48,7 +48,7 @@ def test_ditto_defaults_to_eight_steps_with_a_visible_tail_hold():
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-0}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}" in script
 
 
 def test_ditto_exposes_timing_events():
