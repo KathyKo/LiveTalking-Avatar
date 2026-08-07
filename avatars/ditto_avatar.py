@@ -117,6 +117,11 @@ def _alignment_flush_chunks(run_chunks, valid_clip_len, frames_per_chunk=5):
     return 0 if pending == 0 else (valid_clip_len - pending + frames_per_chunk - 1) // frames_per_chunk
 
 
+def _reserve_drop_frames(already_reserved, pending):
+    """Reserve each in-flight frame once, including the JIT warm-up batch."""
+    return max(already_reserved, pending)
+
+
 def _normalize_source_lips(source_infos, neutral_exp):
     """Replace only source lip motion; preserve its head, eyes and body motion."""
     neutral_lips = np.asarray(neutral_exp).reshape(-1, 3)[list(_LIP_KEYPOINTS)]
@@ -450,7 +455,8 @@ class DittoReal(BaseAvatar):
         self._feat_pos = 0
         pending = self._prof_expected_frames - self._prof_frames_out - self._prof_frames_drop
         if pending > 0:
-            self._drop_ditto_frames += pending     # swallow the SDK's in-flight frames
+            self._drop_ditto_frames = _reserve_drop_frames(
+                self._drop_ditto_frames, pending)
         _drain_queue(self._audio_out)
         _drain_queue(self._ditto_frames)
         _drain_queue(self._frame_keep)

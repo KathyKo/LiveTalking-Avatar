@@ -22,7 +22,7 @@ SRC = pathlib.Path(__file__).resolve().parent.parent / "avatars" / "ditto_avatar
 _WANT_FUNCS = {
     "_tail_frame_counts", "_alignment_flush_chunks",
     "_normalize_source_lips", "_normalize_condition_lips", "_offset_delays",
-    "_is_final_audio_event",
+    "_is_final_audio_event", "_reserve_drop_frames",
 }
 _WANT_CONSTS = {
     "_CHUNKSIZE", "_PREPAD", "_SPLIT_LEN", "_HOP", "_LIP_KEYPOINTS",
@@ -41,6 +41,7 @@ _normalize_source_lips = _ns["_normalize_source_lips"]
 _normalize_condition_lips = _ns["_normalize_condition_lips"]
 _offset_delays = _ns["_offset_delays"]
 _is_final_audio_event = _ns["_is_final_audio_event"]
+_reserve_drop_frames = _ns["_reserve_drop_frames"]
 LIP_KEYPOINTS = _ns["_LIP_KEYPOINTS"]
 CHUNKSIZE, PREPAD, SPLIT_LEN, HOP = (
     _ns["_CHUNKSIZE"], _ns["_PREPAD"], _ns["_SPLIT_LEN"], _ns["_HOP"])
@@ -172,6 +173,13 @@ def main():
     assert pending >= feed_cap
     assert not (np.any(silence) and pending >= feed_cap)
     print("OK: terminal silence bypasses backpressure and can flush the final batch")
+
+    warmup = pending = 5
+    old_reservation = warmup + pending
+    fixed_reservation = _reserve_drop_frames(warmup, pending)
+    assert old_reservation - warmup == 5, "negative control did not drop real speech"
+    assert fixed_reservation - warmup == 0, "first real speech batch is still dropped"
+    print("OK: interrupt does not reserve the 5 warm-up frames twice")
 
 
 if __name__ == "__main__":

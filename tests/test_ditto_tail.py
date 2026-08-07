@@ -76,6 +76,24 @@ def test_alignment_flush_lands_on_sdk_batch_boundary():
     assert "keep_frames=0)" in source
 
 
+def test_flush_does_not_double_reserve_warmup_frames():
+    source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    function = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_reserve_drop_frames"
+    )
+    namespace = {}
+    exec(compile(ast.Module(body=[function], type_ignores=[]), "<drop>", "exec"), namespace)
+    reserve = namespace["_reserve_drop_frames"]
+
+    assert reserve(5, 5) == 5   # warm-up was already reserved
+    assert reserve(5, 20) == 20
+    assert reserve(0, 20) == 20
+
+
 def test_tts_silence_tail_marks_only_its_final_frame():
     source = (Path(__file__).parents[1] / "tts" / "elevenlabs_tts.py").read_text(
         encoding="utf-8"
