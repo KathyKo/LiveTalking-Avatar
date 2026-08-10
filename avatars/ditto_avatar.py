@@ -122,6 +122,26 @@ def _reserve_drop_frames(already_reserved, pending):
     return max(already_reserved, pending)
 
 
+def _frame_thumb(frame):
+    return cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (32, 32),
+                      interpolation=cv2.INTER_AREA).astype(np.float32)
+
+
+def _closest_idle_index(frame, idle_thumbs):
+    target = _frame_thumb(frame)
+    return min(range(len(idle_thumbs)),
+               key=lambda i: float(np.mean(np.abs(target - idle_thumbs[i]))))
+
+
+def _blend_to_idle(frame, idle_frame):
+    if frame.shape != idle_frame.shape:
+        return []
+    return [
+        cv2.addWeighted(frame, 2.0 / 3.0, idle_frame, 1.0 / 3.0, 0),
+        cv2.addWeighted(frame, 1.0 / 3.0, idle_frame, 2.0 / 3.0, 0),
+    ]
+
+
 def _normalize_source_lips(source_infos, neutral_exp):
     """Replace only source lip motion; preserve its head, eyes and body motion."""
     neutral_lips = np.asarray(neutral_exp).reshape(-1, 3)[list(_LIP_KEYPOINTS)]
@@ -657,6 +677,8 @@ class DittoReal(BaseAvatar):
         _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "370")) / 1000.0)
         audio_delay = deque()
         video_delay = deque()
+        idle_blend = deque()
+        idle_thumbs = [_frame_thumb(frame) for frame in self._idle_bgr]
         final_idle_at = None
         dbg_pump_saved = 0
 
@@ -675,6 +697,9 @@ class DittoReal(BaseAvatar):
                 self._final_pending = False
                 in_speech = False
                 self.speaking = False
+                ii = _closest_idle_index(current_frame, idle_thumbs)
+                idle_target = self._idle_bgr[ii]
+                idle_blend.extend(_blend_to_idle(current_frame, idle_target))
                 force_idle_tick = True
                 logger.info("ditto pump: final hold complete -> idle")
             try:
@@ -694,6 +719,7 @@ class DittoReal(BaseAvatar):
                     audio_delay.clear()
                     audio_delay.extend([(None, {})] * _AUDIO_DELAY_CHUNKS)
                     video_delay.clear()
+                    idle_blend.clear()
                 in_speech = True
                 self.speaking = True
                 last_ditto_t = now
@@ -737,9 +763,11 @@ class DittoReal(BaseAvatar):
                     logger.info("ditto pump: speech drained -> idle")
                 if not in_speech:
                     self.speaking = False
-                    idle_frame = self._idle_bgr[ii % len(self._idle_bgr)]
-                    ii += 1
-                    current_frame = idle_frame
+                    if idle_blend:
+                        current_frame = idle_blend.popleft()
+                    else:
+                        current_frame = self._idle_bgr[ii % len(self._idle_bgr)]
+                        ii += 1
                     self._prof_idle += 1
                 else:
                     self._prof_holds += 1

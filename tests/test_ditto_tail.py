@@ -39,7 +39,7 @@ def test_tail_batches_match_audio_duration():
     assert 'DITTO_HOLD", "0.10"' in source
     assert 'DITTO_START_BUFFER", "8"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
-    assert "cv2.addWeighted" not in source
+    assert "idle_blend" in source
     assert "final queues drained; holding last frame" in source
     assert "and self._audio_out.empty() and self._ditto_frames.empty()" in source
     assert "and not self._final_pending" in source
@@ -55,6 +55,16 @@ def test_tail_batches_match_audio_duration():
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source
     assert "SDK tail stalled; draining final audio" in source
+
+
+def test_idle_transition_matches_pose_before_blending():
+    from avatars.ditto_avatar import _blend_to_idle, _closest_idle_index, _frame_thumb
+
+    final = np.full((8, 8, 3), 190, dtype=np.uint8)
+    idle = [np.zeros_like(final), np.full_like(final, 200)]
+    assert _closest_idle_index(final, [_frame_thumb(frame) for frame in idle]) == 1
+    assert len(_blend_to_idle(final, idle[1])) == 2
+    assert _blend_to_idle(final, np.zeros((4, 4, 3), dtype=np.uint8)) == []
 
 
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
@@ -115,6 +125,9 @@ def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
     idle = next(t for t, kind, data in events
                 if t > final and kind == "video" and data == 0)
     assert idle - final >= 0.35
+    assert idle - final < 0.70
+    assert any(t > final and kind == "video" and 0 < data < 255
+               for t, kind, data in events)
     assert not avatar._final_pending
 
 
