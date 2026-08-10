@@ -654,7 +654,7 @@ class DittoReal(BaseAvatar):
         _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "60"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
-        _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "500")) / 1000.0)
+        _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "370")) / 1000.0)
         audio_delay = deque()
         video_delay = deque()
         final_idle_at = None
@@ -804,8 +804,8 @@ class DittoReal(BaseAvatar):
         # Do NOT add use_d_keys here — it restricts the applied keys and flattens
         # the mouth so the output looks like raw source playback (reverted).
         setup_kwargs = dict(
-            sampling_timesteps=int(os.environ.get("DITTO_STEPS", "8")),
-            max_size=int(os.environ.get("DITTO_MAX_SIZE", "640")),
+            sampling_timesteps=int(os.environ.get("DITTO_STEPS", "5")),
+            max_size=int(os.environ.get("DITTO_MAX_SIZE", "896")),
             emo=int(os.environ.get("DITTO_EMO", "4")),
             online_mode=os.environ.get("DITTO_ONLINE", "0") == "1",
         )

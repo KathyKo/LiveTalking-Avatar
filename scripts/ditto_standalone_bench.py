@@ -37,7 +37,7 @@ def main():
     ap.add_argument("--cfg", default=os.environ.get("DITTO_CFG", "/workspace/ditto-talkinghead/checkpoints/ditto_cfg/v0.4_hubert_cfg_pytorch.pkl"))
     ap.add_argument("--data-root", default=os.environ.get("DITTO_DATA_ROOT", "/workspace/ditto-talkinghead/checkpoints/ditto_pytorch"))
     ap.add_argument("--steps", type=int, default=int(os.environ.get("DITTO_STEPS", "5")))
-    ap.add_argument("--max-size", type=int, default=int(os.environ.get("DITTO_MAX_SIZE", "640")))
+    ap.add_argument("--max-size", type=int, default=int(os.environ.get("DITTO_MAX_SIZE", "896")))
     ap.add_argument("--emo", type=int, default=int(os.environ.get("DITTO_EMO", "4")))
     ap.add_argument("--online", action="store_true")
     args = ap.parse_args()
