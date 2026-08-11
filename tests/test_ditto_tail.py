@@ -37,14 +37,14 @@ def test_tail_batches_match_audio_duration():
     # Idle only once the SDK owes no frames AND nothing is left to play.
     assert "return not self._audio_out.empty() or not self._ditto_frames.empty()" in source
     assert 'DITTO_HOLD", "0.10"' in source
-    assert 'DITTO_START_BUFFER", "8"' in source
+    assert 'DITTO_START_BUFFER", "6"' in source
     assert "DITTO_IDLE_FADE_MS" not in source
     assert "idle_blend" in source
-    assert "final queues drained; holding last frame" in source
+    assert "final queues drained; holding" in source
     assert "and self._audio_out.empty() and self._ditto_frames.empty()" in source
     assert "and not self._final_pending" in source
     assert 'DITTO_FINAL_HOLD_MS", "370"' in source
-    assert "final audio played; holding last frame" in source
+    assert "final audio played; holding" in source
     assert "_END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)" in source
     assert "while (np.any(a) and" in source
     assert "ditto final audio received: flushing tail" in source
@@ -63,8 +63,11 @@ def test_idle_transition_matches_pose_before_blending():
     final = np.full((8, 8, 3), 190, dtype=np.uint8)
     idle = [np.zeros_like(final), np.full_like(final, 200)]
     assert _closest_idle_index(final, [_frame_thumb(frame) for frame in idle]) == 1
-    assert len(_blend_to_idle(final, idle[1])) == 2
-    assert _blend_to_idle(final, np.zeros((4, 4, 3), dtype=np.uint8)) == []
+    transition = _blend_to_idle(final, [idle[1]] * 4)
+    assert len(transition) == 4
+    assert all(np.mean(transition[i]) < np.mean(transition[i + 1])
+               for i in range(3))
+    assert _blend_to_idle(final, [np.zeros((4, 4, 3), dtype=np.uint8)]) == []
 
 
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):

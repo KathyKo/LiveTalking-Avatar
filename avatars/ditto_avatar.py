@@ -123,7 +123,14 @@ def _reserve_drop_frames(already_reserved, pending):
 
 
 def _frame_thumb(frame):
-    return cv2.resize(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (32, 32),
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    height, width = gray.shape
+    # The avatars are centred. Compare the face and upper body instead of the
+    # static background, which otherwise dominates the nearest-idle match.
+    crop = gray[height // 20:height * 9 // 10, width // 5:width * 4 // 5]
+    if not crop.size:
+        crop = gray
+    return cv2.resize(crop, (32, 32),
                       interpolation=cv2.INTER_AREA).astype(np.float32)
 
 
@@ -133,13 +140,16 @@ def _closest_idle_index(frame, idle_thumbs):
                key=lambda i: float(np.mean(np.abs(target - idle_thumbs[i]))))
 
 
-def _blend_to_idle(frame, idle_frame):
-    if frame.shape != idle_frame.shape:
+def _blend_to_idle(frame, idle_frames):
+    if not idle_frames or any(frame.shape != target.shape for target in idle_frames):
         return []
-    return [
-        cv2.addWeighted(frame, 2.0 / 3.0, idle_frame, 1.0 / 3.0, 0),
-        cv2.addWeighted(frame, 1.0 / 3.0, idle_frame, 2.0 / 3.0, 0),
-    ]
+    blended = []
+    count = len(idle_frames)
+    for step, target in enumerate(idle_frames, 1):
+        progress = step / (count + 1)
+        alpha = progress * progress * (3.0 - 2.0 * progress)
+        blended.append(cv2.addWeighted(frame, 1.0 - alpha, target, alpha, 0))
+    return blended
 
 
 def _normalize_source_lips(source_infos, neutral_exp):
@@ -668,13 +678,16 @@ class DittoReal(BaseAvatar):
         last_ditto_t = 0.0
         in_speech = False
         _HOLD = float(os.environ.get("DITTO_HOLD", "0.10"))
-        _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "8"))
+        _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "6"))
         # Positive delays audio; negative delays video. Pairing remains exact at
         # zero, while a measured fixed display/model offset can be compensated.
         _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "60"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
         _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "370")) / 1000.0)
+        _IDLE_BLEND_FRAMES = 4
+        _IDLE_BLEND_SECONDS = _IDLE_BLEND_FRAMES * 0.04
+        _FINAL_STATIC_HOLD = max(0.0, _FINAL_HOLD - _IDLE_BLEND_SECONDS)
         audio_delay = deque()
         video_delay = deque()
         idle_blend = deque()
@@ -698,10 +711,16 @@ class DittoReal(BaseAvatar):
                 in_speech = False
                 self.speaking = False
                 ii = _closest_idle_index(current_frame, idle_thumbs)
-                idle_target = self._idle_bgr[ii]
-                idle_blend.extend(_blend_to_idle(current_frame, idle_target))
+                blend_targets = [
+                    self._idle_bgr[(ii + offset) % len(self._idle_bgr)]
+                    for offset in range(_IDLE_BLEND_FRAMES)
+                ]
+                transition = _blend_to_idle(current_frame, blend_targets)
+                if transition:
+                    idle_blend.extend(transition)
+                    ii = (ii + _IDLE_BLEND_FRAMES) % len(self._idle_bgr)
                 force_idle_tick = True
-                logger.info("ditto pump: final hold complete -> idle")
+                logger.info("ditto pump: final hold complete -> idle transition")
             try:
                 if force_idle_tick or final_idle_at is not None:
                     raise queue.Empty
@@ -740,7 +759,7 @@ class DittoReal(BaseAvatar):
                     dbg_pump_saved += 1
             except queue.Empty:
                 if final_idle_at is not None:
-                    pass  # hold the last generated frame until the 500ms deadline
+                    pass  # hold the last generated frame until the blend begins
                 elif in_speech and video_delay:
                     current_frame = video_delay.popleft()
                     got_ditto = True
@@ -795,16 +814,18 @@ class DittoReal(BaseAvatar):
                 final_audio_played = final_audio_played or _is_final_audio_event(ud)
             if final_audio_played:
                 self._final_pending = False
-                final_idle_at = time.perf_counter() + _FINAL_HOLD
-                logger.info("ditto pump: final audio played; holding last frame %.0fms",
-                            _FINAL_HOLD * 1000.0)
+                final_idle_at = time.perf_counter() + _FINAL_STATIC_HOLD
+                logger.info(
+                    "ditto pump: final audio played; holding %.0fms then blending %.0fms to idle",
+                    _FINAL_STATIC_HOLD * 1000.0, _IDLE_BLEND_SECONDS * 1000.0)
             elif (self._final_pending and not self._utt_active
                   and self._audio_out.empty() and self._ditto_frames.empty()
                   and not audio_delay and not video_delay):
                 self._final_pending = False
-                final_idle_at = time.perf_counter() + _FINAL_HOLD
-                logger.info("ditto pump: final queues drained; holding last frame %.0fms",
-                            _FINAL_HOLD * 1000.0)
+                final_idle_at = time.perf_counter() + _FINAL_STATIC_HOLD
+                logger.info(
+                    "ditto pump: final queues drained; holding %.0fms then blending %.0fms to idle",
+                    _FINAL_STATIC_HOLD * 1000.0, _IDLE_BLEND_SECONDS * 1000.0)
 
             target += 0.04
             dt = target - time.perf_counter()

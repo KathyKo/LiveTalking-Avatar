@@ -45,7 +45,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
-    assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-8}" in script
+    assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-300}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
