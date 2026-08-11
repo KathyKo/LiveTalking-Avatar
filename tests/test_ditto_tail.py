@@ -181,6 +181,7 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     source = (Path(__file__).parents[1] / "tts" / "elevenlabs_tts.py").read_text(
         encoding="utf-8"
     )
+    assert 'DITTO_TAIL_MS", "500"' in source
     assert "for index in range((pause_ms + 19) // 20):" in source
     assert "if index * 20 + 20 >= pause_ms:" in source
     assert 'status="end" if final else "segment_end"' in source
