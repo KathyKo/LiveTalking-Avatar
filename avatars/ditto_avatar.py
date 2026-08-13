@@ -152,6 +152,17 @@ def _blend_to_idle(frame, idle_frames):
     return blended
 
 
+def _resize_idle_frame(frame, target_shape):
+    """Match idle video dimensions to Ditto's WebRTC output dimensions."""
+    target_height, target_width = target_shape[:2]
+    if frame.shape[:2] == (target_height, target_width):
+        return frame
+    shrinking = frame.shape[0] > target_height or frame.shape[1] > target_width
+    interpolation = cv2.INTER_AREA if shrinking else cv2.INTER_LINEAR
+    return cv2.resize(frame, (target_width, target_height),
+                      interpolation=interpolation)
+
+
 def _normalize_source_lips(source_infos, neutral_exp):
     """Replace only source lip motion; preserve its head, eyes and body motion."""
     neutral_lips = np.asarray(neutral_exp).reshape(-1, 3)[list(_LIP_KEYPOINTS)]
@@ -688,8 +699,12 @@ class DittoReal(BaseAvatar):
 
     def _load_idle_bgr(self):
         avatar_dir = os.path.dirname(self.source_path)
-        use_generated = os.environ.get("DITTO_GENERATE_IDLE", "1") == "1"
+        # Generation and playback are separate decisions. A generated clip may
+        # exist for comparison, but normal idle must remain the recorded,
+        # closed-mouth idle.mp4 unless explicitly opted in.
+        use_generated = os.environ.get("DITTO_USE_GENERATED_IDLE", "0") == "1"
         names = ("idle.generated.mp4", "idle.mp4") if use_generated else ("idle.mp4",)
+        target_shape = self.sdk.source_info["img_rgb_lst"][0].shape
         for name in names:
             idle_path = os.path.join(avatar_dir, name)
             if not os.path.exists(idle_path):
@@ -703,7 +718,7 @@ class DittoReal(BaseAvatar):
                 ok, frame = cap.read()
                 if not ok:
                     break
-                frames.append(frame)
+                frames.append(_resize_idle_frame(frame, target_shape))
             cap.release()
             if frames:
                 logger.info("ditto idle video loaded: %s frames=%d", idle_path, len(frames))

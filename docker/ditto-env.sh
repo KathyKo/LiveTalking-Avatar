@@ -47,9 +47,10 @@ export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-100}
 # this value freezes the final generated frame longer before the 160ms blend.
 export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}
 
-# Build a decoder-matched idle once per source/render configuration. The
-# original idle.mp4 remains untouched and is always the fallback.
-export DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-1}
+# Keep the recorded closed-mouth idle.mp4 as the visible idle. Generation is
+# opt-in, and generating a comparison clip never makes the server play it.
+export DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-0}
+export DITTO_USE_GENERATED_IDLE=${DITTO_USE_GENERATED_IDLE:-0}
 
 export ASR_MODEL=${ASR_MODEL:-Qwen/Qwen3-ASR-0.6B}
 export ASR_DEVICE=${ASR_DEVICE:-cuda:0}

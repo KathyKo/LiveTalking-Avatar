@@ -58,7 +58,12 @@ def test_tail_batches_match_audio_duration():
 
 
 def test_idle_transition_matches_pose_before_blending():
-    from avatars.ditto_avatar import _blend_to_idle, _closest_idle_index, _frame_thumb
+    from avatars.ditto_avatar import (
+        _blend_to_idle,
+        _closest_idle_index,
+        _frame_thumb,
+        _resize_idle_frame,
+    )
 
     final = np.full((8, 8, 3), 190, dtype=np.uint8)
     idle = [np.zeros_like(final), np.full_like(final, 200)]
@@ -68,6 +73,11 @@ def test_idle_transition_matches_pose_before_blending():
     assert all(np.mean(transition[i]) < np.mean(transition[i + 1])
                for i in range(3))
     assert _blend_to_idle(final, [np.zeros((4, 4, 3), dtype=np.uint8)]) == []
+
+    recorded_idle = np.zeros((16, 24, 3), dtype=np.uint8)
+    fitted_idle = _resize_idle_frame(recorded_idle, final.shape)
+    assert fitted_idle.shape == final.shape
+    assert len(_blend_to_idle(final, [fitted_idle] * 4)) == 4
 
 
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
