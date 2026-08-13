@@ -1,51 +1,31 @@
-"""Render idle.mp4 through Ditto itself, so switching to idle has no seam.
+"""Generate a decoder-matched idle clip without replacing the original."""
 
-The seam you see when speech ends is not a timing bug. self._idle_bgr comes from
-a hand-recorded idle.mp4, while speech frames come out of Ditto's warp network +
-decoder at max_size. Those are two different renderings of the same person, so
-cutting or crossfading between them shows a change in crop, sharpness and colour
-no amount of hold/blend tuning can hide.
-
-Feeding silence through the same SDK, with the same setup kwargs, produces idle
-frames that ARE decoder output — pixel-consistent with speech by construction.
-
-On the pod, in a JupyterLab terminal:
-
-    cd /opt/livetalking
-    source docker/ditto-env.sh     # REQUIRED — see below
-    mv data/avatars/ditto_woman/idle.mp4 data/avatars/ditto_woman/idle.mp4.bak
-    python scripts/ditto_make_idle.py --avatar ditto_woman
-
-The source line is not optional. start.sh exports DITTO_* inside the server's
-own process, so a fresh shell does not see them and this script would silently
-fall back to different defaults (EMO=4, ONLINE=0 instead of the server's 0 and
-1) — producing an idle clip that does not match, with no error. It prints the
-kwargs it used; check them against the server's "ditto setup kwargs:" log line.
-
-Re-run it whenever DITTO_MAX_SIZE / DITTO_STEPS / DITTO_EXP / DITTO_EMO change.
-data/ is a symlink to the network volume, so the result survives pod restarts.
-"""
-
+import argparse
+import hashlib
+import json
 import os
 import sys
-import time
-import argparse
 import threading
+import time
 
 import cv2
 import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from avatars.ditto_avatar import setup_kwargs_from_env   # noqa: E402
+from avatars.ditto_avatar import (  # noqa: E402
+    neutralize_sdk_source_lips,
+    setup_kwargs_from_env,
+)
 
 CHUNKSIZE = (3, 5, 2)
 SPLIT_LEN = int(sum(CHUNKSIZE) * 0.04 * 16000) + 80
 FPS = 25
+GENERATOR_VERSION = 2
 
 
 class Collector:
-    """Ditto's writer_worker is a single thread, so append order is frame order."""
+    """Collect frames from Ditto's single writer thread in output order."""
 
     def __init__(self):
         self.frames = []
@@ -62,102 +42,146 @@ class Collector:
 
 
 def ping_pong(frames):
-    """Forward then backward, so looping the clip never hard-cuts.
-
-    The pump plays _idle_bgr[ii % len], so frame -1 butts straight against
-    frame 0. Mirroring makes the two ends identical instead.
-    ponytail: doubles the frame count. Fine at a few seconds; if idle ever needs
-    to be long, cross-dissolve the ends instead of mirroring.
-    """
+    """Mirror a sequence without repeating either endpoint."""
     return frames + frames[-2:0:-1] if len(frames) > 2 else frames
 
 
+def file_sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def build_fingerprint(source, idle, kwargs, seconds, ping_pong_enabled):
+    payload = {
+        "version": GENERATOR_VERSION,
+        "source_sha256": file_sha256(source),
+        "idle_sha256": file_sha256(idle),
+        "kwargs": kwargs,
+        "seconds": seconds,
+        "ping_pong": ping_pong_enabled,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest(), payload
+
+
 def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--avatar", default=os.environ.get("AVATAR_ID", "ditto_woman"))
-    ap.add_argument("--data-root", default=os.environ.get("DITTO_AVATAR_DATA", "data/avatars"))
-    ap.add_argument("--seconds", type=float, default=4.0,
-                    help="silence to render; ping-pong doubles the loop length")
-    ap.add_argument("--out", default=None, help="default: <avatar dir>/idle.mp4")
-    ap.add_argument("--ditto-repo", default=os.environ.get("DITTO_REPO", "/opt/ditto-talkinghead"))
-    ap.add_argument("--cfg", default=os.environ["DITTO_CFG"] if "DITTO_CFG" in os.environ else None)
-    ap.add_argument("--sdk-data-root", default=os.environ.get("DITTO_DATA_ROOT"))
-    ap.add_argument("--no-ping-pong", action="store_true")
-    args = ap.parse_args()
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--avatar", default=os.environ.get("AVATAR_ID", "ditto_woman"))
+    parser.add_argument(
+        "--data-root", default=os.environ.get("DITTO_AVATAR_DATA", "data/avatars"))
+    parser.add_argument("--seconds", type=float, default=4.0)
+    parser.add_argument("--out", default=None)
+    parser.add_argument(
+        "--ditto-repo", default=os.environ.get("DITTO_REPO", "/opt/ditto-talkinghead"))
+    parser.add_argument(
+        "--cfg", default=os.environ.get("DITTO_CFG"))
+    parser.add_argument(
+        "--sdk-data-root", default=os.environ.get("DITTO_DATA_ROOT"))
+    parser.add_argument("--no-ping-pong", action="store_true")
+    parser.add_argument("--if-stale", action="store_true")
+    args = parser.parse_args()
 
     if not args.cfg or not args.sdk_data_root:
-        sys.exit("set DITTO_CFG and DITTO_DATA_ROOT (or pass --cfg/--sdk-data-root)")
+        sys.exit("set DITTO_CFG and DITTO_DATA_ROOT")
 
     avatar_dir = os.path.join(args.data_root, args.avatar)
-    sources = [os.path.join(avatar_dir, name) for name in sorted(os.listdir(avatar_dir))
-               if name.startswith("source.")]
+    sources = [
+        os.path.join(avatar_dir, name)
+        for name in sorted(os.listdir(avatar_dir))
+        if name.startswith("source.")
+    ]
     if not sources:
         sys.exit(f"no source.* in {avatar_dir}")
-    source, out = sources[0], args.out or os.path.join(avatar_dir, "idle.mp4")
-    if os.path.exists(out):
-        # Never silently destroy the clip that is currently working.
-        sys.exit(f"{out} exists — move it aside first (that is also your rollback)")
+
+    source = sources[0]
+    original_idle = os.path.join(avatar_dir, "idle.mp4")
+    if not os.path.exists(original_idle):
+        sys.exit(f"no original idle.mp4 in {avatar_dir}")
+    out = args.out or os.path.join(avatar_dir, "idle.generated.mp4")
+
+    kwargs = setup_kwargs_from_env()
+    fingerprint, fingerprint_data = build_fingerprint(
+        source, original_idle, kwargs, args.seconds, not args.no_ping_pong)
+    metadata_path = out + ".json"
+    if args.if_stale and os.path.exists(out) and os.path.exists(metadata_path):
+        try:
+            with open(metadata_path, "r", encoding="utf-8") as handle:
+                if json.load(handle).get("fingerprint") == fingerprint:
+                    print(f"generated idle is current: {out}")
+                    return
+        except (OSError, ValueError):
+            pass
+    elif os.path.exists(out):
+        sys.exit(f"{out} exists; pass --if-stale to replace it safely")
 
     sys.path.insert(0, args.ditto_repo)
     from stream_pipeline_online import StreamSDK
 
-    kwargs = setup_kwargs_from_env()
     print(f"source={source}\nkwargs={kwargs}")
     sdk = StreamSDK(args.cfg, args.sdk_data_root)
     sdk.setup(source, "/tmp/ditto_make_idle_dummy.mp4", **kwargs)
+    neutralize_sdk_source_lips(sdk, original_idle)
 
     collector = Collector()
     sdk.writer = collector
-
     wanted = int(args.seconds * FPS)
     runs = (wanted + CHUNKSIZE[1] - 1) // CHUNKSIZE[1]
     silence = np.zeros(SPLIT_LEN, dtype=np.float32)
     for _ in range(runs):
         sdk.run_chunk(silence, CHUNKSIZE)
 
-    # The SDK generates asynchronously; wait until it stops producing.
     deadline = time.perf_counter() + max(120.0, args.seconds * 20)
     while time.perf_counter() < deadline:
         with collector.lock:
-            n, last = len(collector.frames), collector.last
-        if n >= runs * CHUNKSIZE[1]:
+            count, last = len(collector.frames), collector.last
+        if count >= runs * CHUNKSIZE[1]:
             break
         if last and time.perf_counter() - last > 15:
-            print(f"SDK stopped producing at {n} frames")
+            print(f"SDK stopped producing at {count} frames")
             break
         time.sleep(0.2)
 
     with collector.lock:
         frames = list(collector.frames)
-    # Ditto's online mode warms up on the first batch; those frames are the ones
-    # the server drops at speech start, so they do not belong in a loop either.
     frames = frames[CHUNKSIZE[1] * 2:]
     if len(frames) < FPS:
-        sys.exit(f"only {len(frames)} usable frames — check cfg/data-root and GPU")
+        sys.exit(f"only {len(frames)} usable frames; check cfg, models and GPU")
     if not args.no_ping_pong:
         frames = ping_pong(frames)
 
     height, width = frames[0].shape[:2]
-    writer = cv2.VideoWriter(out, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (width, height))
+    temporary_out = out + ".tmp.mp4"
+    writer = cv2.VideoWriter(
+        temporary_out, cv2.VideoWriter_fourcc(*"mp4v"), FPS, (width, height))
     if not writer.isOpened():
-        sys.exit(f"cannot open {out} for writing")
+        sys.exit(f"cannot open {temporary_out} for writing")
     for frame in frames:
         writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
     writer.release()
+    os.replace(temporary_out, out)
+
+    metadata = {"fingerprint": fingerprint, **fingerprint_data}
+    temporary_metadata = metadata_path + ".tmp"
+    with open(temporary_metadata, "w", encoding="utf-8") as handle:
+        json.dump(metadata, handle, indent=2, sort_keys=True)
+    os.replace(temporary_metadata, metadata_path)
+
     try:
         sdk.close()
     except Exception:
         pass
-    print(f"wrote {out}: {len(frames)} frames @ {FPS}fps, {width}x{height} "
-          f"({len(frames) / FPS:.1f}s loop)")
+    print(
+        f"wrote {out}: {len(frames)} frames @ {FPS}fps, "
+        f"{width}x{height} ({len(frames) / FPS:.1f}s loop)")
 
 
 def selfcheck():
     assert ping_pong([1, 2, 3, 4]) == [1, 2, 3, 4, 3, 2]
     assert ping_pong([1, 2]) == [1, 2]
     assert ping_pong([1]) == [1]
-    # Mirroring must not repeat the end frame, or the loop stutters there.
-    assert ping_pong([1, 2, 3])[-1] != ping_pong([1, 2, 3])[0]
     print("OK")
 
 

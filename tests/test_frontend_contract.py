@@ -54,11 +54,24 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}" in script
-    # 220 = 60ms hold (covers the DITTO_AV_OFFSET_MS audio backlog) + 160ms blend.
-    # 370 left the last generated frame frozen for 210ms before the blend even
-    # started, which was the visible pause at the end of every sentence.
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-80}" in script
     assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}" in script
+    assert "DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-1}" in script
+
+
+def test_generated_idle_is_optional_and_preserves_original():
+    start = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
+    avatar = (ROOT / "avatars" / "ditto_avatar.py").read_text(encoding="utf-8")
+    generator = (ROOT / "scripts" / "ditto_make_idle.py").read_text(encoding="utf-8")
+
+    assert 'if [[ "$DITTO_GENERATE_IDLE" == "1" ]]' in start
+    assert "WARNING: generated idle failed; using original idle.mp4" in start
+    assert '("idle.generated.mp4", "idle.mp4")' in avatar
+    assert 'not os.path.exists(idle_path + ".json")' in avatar
+    assert "neutralize_sdk_source_lips(sdk, original_idle)" in generator
+    assert 'original_idle = os.path.join(avatar_dir, "idle.mp4")' in generator
+    assert "os.replace(temporary_out, out)" in generator
+    assert "os.replace(temporary_out, original_idle)" not in generator
 
 
 def test_ditto_exposes_timing_events():

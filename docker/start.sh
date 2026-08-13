@@ -74,6 +74,20 @@ if [[ ! -f "$MODEL_ROOT/ditto_cfg/v0.4_hubert_cfg_trt_online.pkl" || \
         --local-dir "$MODEL_ROOT"
 fi
 
+if [[ "$DITTO_GENERATE_IDLE" == "1" ]]; then
+    echo "Checking decoder-matched idle for $AVATAR_ID ..."
+    if ! python "$APP_ROOT/scripts/ditto_make_idle.py" \
+        --avatar "$AVATAR_ID" \
+        --data-root "$DATA_ROOT/avatars" \
+        --out "$DATA_ROOT/avatars/$AVATAR_ID/idle.generated.mp4" \
+        --if-stale; then
+        echo "WARNING: generated idle failed; using original idle.mp4" >&2
+        rm -f "$DATA_ROOT/avatars/$AVATAR_ID/idle.generated.mp4.tmp.mp4" \
+              "$DATA_ROOT/avatars/$AVATAR_ID/idle.generated.mp4.json.tmp" \
+              "$DATA_ROOT/avatars/$AVATAR_ID/idle.generated.mp4.json"
+    fi
+fi
+
 cd "$APP_ROOT"
 exec python app.py \
     --model ditto \

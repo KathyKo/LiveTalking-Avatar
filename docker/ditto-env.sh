@@ -42,11 +42,14 @@ export DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}
 export DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}
 export DITTO_HOLD=${DITTO_HOLD:-0.10}
 export DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}
-export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}
-# 220 = 60ms hold (covers the DITTO_AV_OFFSET_MS audio backlog) + 160ms blend.
-# 370 froze the last generated frame for 210ms before the blend even started,
-# which was the visible pause at the end of every sentence.
+export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-80}
+# Keep the final transition independent from the A/V calibration offset. Raising
+# this value freezes the final generated frame longer before the 160ms blend.
 export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}
+
+# Build a decoder-matched idle once per source/render configuration. The
+# original idle.mp4 remains untouched and is always the fallback.
+export DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-1}
 
 export ASR_MODEL=${ASR_MODEL:-Qwen/Qwen3-ASR-0.6B}
 export ASR_DEVICE=${ASR_DEVICE:-cuda:0}

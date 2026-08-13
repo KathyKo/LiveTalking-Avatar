@@ -171,6 +171,29 @@ def _normalize_condition_lips(condition, neutral_exp):
     return result
 
 
+def neutralize_sdk_source_lips(sdk, idle_path):
+    """Apply the same closed-mouth source baseline used by the live server."""
+    cap = cv2.VideoCapture(idle_path)
+    ok, idle_bgr = cap.read()
+    cap.release()
+    if not ok:
+        raise RuntimeError(f"cannot read {idle_path}")
+
+    neutral = sdk.avatar_registrar.source2info(
+        cv2.cvtColor(idle_bgr, cv2.COLOR_BGR2RGB),
+        crop_scale=sdk.crop_scale,
+        crop_vx_ratio=sdk.crop_vx_ratio,
+        crop_vy_ratio=sdk.crop_vy_ratio,
+        crop_flag_do_rot=sdk.crop_flag_do_rot,
+    )
+    neutral_exp = neutral["x_s_info"]["exp"]
+    count = _normalize_source_lips(sdk.source_info["x_s_info_lst"], neutral_exp)
+    for name in ("s_kp_cond", "kp_cond"):
+        setattr(sdk.audio2motion, name, _normalize_condition_lips(
+            getattr(sdk.audio2motion, name), neutral_exp))
+    return count
+
+
 def _offset_delays(offset_ms):
     """Return (20ms audio chunks, 40ms video frames) to delay."""
     return (
@@ -664,8 +687,14 @@ class DittoReal(BaseAvatar):
                         "nonzero prev.", self._dbg_dir)
 
     def _load_idle_bgr(self):
-        idle_path = os.path.join(os.path.dirname(self.source_path), "idle.mp4")
-        if os.path.exists(idle_path):
+        avatar_dir = os.path.dirname(self.source_path)
+        for name in ("idle.generated.mp4", "idle.mp4"):
+            idle_path = os.path.join(avatar_dir, name)
+            if not os.path.exists(idle_path):
+                continue
+            if name == "idle.generated.mp4" and not os.path.exists(idle_path + ".json"):
+                logger.warning("ditto generated idle ignored: missing fingerprint metadata")
+                continue
             cap = cv2.VideoCapture(idle_path)
             frames = []
             while True:
@@ -685,27 +714,8 @@ class DittoReal(BaseAvatar):
         if os.environ.get("DITTO_NEUTRAL_LIPS", "1").lower() in {"0", "false", "no"}:
             return
         idle_path = os.path.join(os.path.dirname(self.source_path), "idle.mp4")
-        cap = cv2.VideoCapture(idle_path)
-        ok, idle_bgr = cap.read()
-        cap.release()
-        if not ok:
-            logger.warning("ditto neutral lips skipped: cannot read %s", idle_path)
-            return
         try:
-            source2info = self.sdk.avatar_registrar.source2info
-            neutral = source2info(
-                cv2.cvtColor(idle_bgr, cv2.COLOR_BGR2RGB),
-                crop_scale=self.sdk.crop_scale,
-                crop_vx_ratio=self.sdk.crop_vx_ratio,
-                crop_vy_ratio=self.sdk.crop_vy_ratio,
-                crop_flag_do_rot=self.sdk.crop_flag_do_rot,
-            )
-            count = _normalize_source_lips(
-                self.sdk.source_info["x_s_info_lst"], neutral["x_s_info"]["exp"])
-            audio2motion = self.sdk.audio2motion
-            for name in ("s_kp_cond", "kp_cond"):
-                setattr(audio2motion, name, _normalize_condition_lips(
-                    getattr(audio2motion, name), neutral["x_s_info"]["exp"]))
+            count = neutralize_sdk_source_lips(self.sdk, idle_path)
             logger.info("ditto neutral lips: applied idle mouth baseline to %d source frames",
                         count)
         except Exception:
@@ -724,7 +734,7 @@ class DittoReal(BaseAvatar):
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "6"))
         # Positive delays audio; negative delays video. Pairing remains exact at
         # zero, while a measured fixed display/model offset can be compensated.
-        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "60"))
+        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "80"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
         _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "370")) / 1000.0)
