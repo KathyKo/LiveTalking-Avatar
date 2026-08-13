@@ -7,6 +7,39 @@ from utils.logger import logger
 from .base_tts import BaseTTS, State
 from registry import register
 
+# Loudness matching across segments. Each semantic segment is its own ElevenLabs
+# request, and ElevenLabs picks the emphasis per request: "Certainly!" comes back
+# far hotter than a long sentence, so the avatar's volume jumps between them.
+_TARGET_RMS = float(os.environ.get("TTS_TARGET_RMS", "0.06"))   # ~ -24 dBFS
+_MAX_GAIN = float(os.environ.get("TTS_MAX_GAIN", "4.0"))
+_CEILING = float(os.environ.get("TTS_CEILING", "0.95"))
+_ESTIMATE_FRAMES = int(os.environ.get("TTS_ESTIMATE_FRAMES", "8"))   # 8 x 20ms
+
+
+def _segment_gain(frames):
+    """One gain for a whole segment, from its first frames.
+
+    The jumps are BETWEEN segments, not inside one, so a single frozen gain
+    removes them while leaving the segment's own dynamics untouched — unlike a
+    continuously adapting AGC, which would pump inside a sentence.
+
+    ponytail: estimated from a 160ms prefix rather than the whole segment.
+    Buffering a whole segment would add its generation tail to every gap between
+    segments, and TTS loudness is near-stationary within one sentence anyway.
+    Bounded by both an RMS target and the prefix's peak headroom, so a hot
+    segment is pulled down and a quiet one lifted without clipping.
+    """
+    if not frames:
+        return 1.0
+    audio = np.concatenate(frames)
+    rms = float(np.sqrt(np.mean(np.square(audio))))
+    peak = float(np.max(np.abs(audio)))
+    if rms < 1e-4 or peak < 1e-4:
+        return 1.0                      # silence carries no level to match
+    # Only the boost is capped, so near-silence is not amplified into noise.
+    # Attenuation is unbounded: a hot segment needs whatever cut it takes.
+    return float(min(_TARGET_RMS / rms, _CEILING / peak, _MAX_GAIN))
+
 
 @register("tts", "elevenlabs")
 class ElevenLabsTTS(BaseTTS):
@@ -15,10 +48,21 @@ class ElevenLabsTTS(BaseTTS):
         self._client = ElevenLabs(api_key=os.environ["ELEVENLABS_API_KEY"])
         self._voice_id = opt.REF_FILE or "SEWXl8lPSO01tdGbWECX"
         self._previous_text = ""
+        self._first_frame = True
 
     def flush_talk(self):
         super().flush_talk()
         self._previous_text = ""
+
+    def _emit(self, frames, text, textevent, gain):
+        for frame in frames:
+            eventpoint = {}
+            if self._first_frame:
+                eventpoint = {"status": "start", "text": text}
+                self._first_frame = False
+            eventpoint.update(**textevent)
+            self.parent.put_audio_frame(
+                np.clip(frame * gain, -1.0, 1.0), eventpoint)
 
     def txt_to_audio(self, msg: tuple[str, dict]):
         text, textevent = msg
@@ -29,8 +73,11 @@ class ElevenLabsTTS(BaseTTS):
                 self._send_silence_tail(text, textevent, True)
             return
 
-        first = True
+        self._first_frame = True
         started = time.perf_counter()
+        # Frames held back while the segment's gain is still being estimated.
+        held = []
+        gain = None
         try:
             chunks = self._client.text_to_speech.stream(
                 voice_id=self._voice_id,
@@ -53,12 +100,15 @@ class ElevenLabsTTS(BaseTTS):
                     raw_frame = bytes(pcm_buffer[:frame_bytes])
                     del pcm_buffer[:frame_bytes]
                     frame = np.frombuffer(raw_frame, dtype=np.int16).astype(np.float32) / 32768.0
-                    eventpoint = {}
-                    if first:
-                        eventpoint = {"status": "start", "text": text}
-                        first = False
-                    eventpoint.update(**textevent)
-                    self.parent.put_audio_frame(frame, eventpoint)
+                    if gain is not None:
+                        self._emit([frame], text, textevent, gain)
+                        continue
+                    held.append(frame)
+                    if len(held) >= _ESTIMATE_FRAMES:
+                        gain = _segment_gain(held)
+                        logger.info("elevenlabs segment gain: %.2fx", gain)
+                        self._emit(held, text, textevent, gain)
+                        held = []
         except Exception:
             logger.exception("elevenlabs tts error")
             return
@@ -67,13 +117,13 @@ class ElevenLabsTTS(BaseTTS):
         usable_bytes = len(pcm_buffer) - (len(pcm_buffer) % 2)
         if usable_bytes:
             frame = np.frombuffer(bytes(pcm_buffer[:usable_bytes]), dtype=np.int16).astype(np.float32) / 32768.0
-            frame = np.pad(frame, (0, self.chunk - len(frame)))
-            eventpoint = {}
-            if first:
-                eventpoint = {"status": "start", "text": text}
-                first = False
-            eventpoint.update(**textevent)
-            self.parent.put_audio_frame(frame, eventpoint)
+            held.append(np.pad(frame, (0, self.chunk - len(frame))))
+        if held:
+            # Segment shorter than the estimate window: gain it on what we got.
+            if gain is None:
+                gain = _segment_gain(held)
+                logger.info("elevenlabs segment gain: %.2fx (short segment)", gain)
+            self._emit(held, text, textevent, gain)
 
         self._send_silence_tail(text, textevent, final)
         self._previous_text = text

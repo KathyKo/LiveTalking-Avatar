@@ -65,7 +65,11 @@ def test_elevenlabs_forwards_pcm_while_streaming():
     tts = (ROOT / "tts" / "elevenlabs_tts.py").read_text(encoding="utf-8")
     assert 'raw = b"".join(chunks)' not in tts
     assert "for pcm_chunk in chunks:" in tts
-    assert "self.parent.put_audio_frame(frame, eventpoint)" in tts
+    # Frames leave while the stream is still arriving. Only the segment's first
+    # _ESTIMATE_FRAMES are held back, to fix its loudness against other segments.
+    assert "self._emit([frame], text, textevent, gain)" in tts
+    assert "np.clip(frame * gain, -1.0, 1.0), eventpoint)" in tts
+    assert "if len(held) >= _ESTIMATE_FRAMES:" in tts
     assert "re.split" not in tts
     assert "for _ in range(3)" not in tts
     assert "elevenlabs first audio:" in tts

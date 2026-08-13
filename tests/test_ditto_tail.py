@@ -186,3 +186,44 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     assert "if index * 20 + 20 >= pause_ms:" in source
     assert 'status="end" if final else "segment_end"' in source
     assert "final=final" in source
+
+
+def _load_segment_gain():
+    """_segment_gain without importing the module (needs elevenlabs + API key)."""
+    source = (Path(__file__).parents[1] / "tts" / "elevenlabs_tts.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    wanted = [
+        node for node in tree.body
+        if (isinstance(node, ast.Assign)
+            and any(getattr(t, "id", "").startswith(("_TARGET", "_MAX", "_CEILING"))
+                    for t in node.targets))
+        or (isinstance(node, ast.FunctionDef) and node.name == "_segment_gain")
+    ]
+    namespace = {"np": np, "os": __import__("os")}
+    exec(compile(ast.Module(body=wanted, type_ignores=[]), "<gain>", "exec"), namespace)
+    return namespace["_segment_gain"], namespace["_TARGET_RMS"]
+
+
+def test_segment_gain_matches_loudness_across_segments():
+    """Hot and quiet segments must land at the same level, without clipping."""
+    gain, target = _load_segment_gain()
+    rng = np.random.default_rng(0)
+    noise = rng.standard_normal(3200).astype(np.float32)
+    noise /= np.max(np.abs(noise))
+
+    def leveled(rms):
+        scaled = noise * (rms / float(np.sqrt(np.mean(np.square(noise)))))
+        frames = [scaled[i:i + 320] for i in range(0, 3200, 320)]
+        g = gain(frames)
+        out = np.concatenate([np.clip(f * g, -1.0, 1.0) for f in frames])
+        return float(np.sqrt(np.mean(np.square(out)))), float(np.max(np.abs(out)))
+
+    hot_rms, hot_peak = leveled(0.30)     # "Certainly!"
+    quiet_rms, quiet_peak = leveled(0.02)  # a long flat sentence
+    assert abs(hot_rms - quiet_rms) < 0.2 * target, (hot_rms, quiet_rms)
+    assert hot_peak <= 1.0 and quiet_peak <= 1.0
+    # Silence must pass through untouched, not be amplified into noise.
+    assert gain([np.zeros(320, dtype=np.float32)]) == 1.0
+    assert gain([]) == 1.0
