@@ -9,14 +9,21 @@ no amount of hold/blend tuning can hide.
 Feeding silence through the same SDK, with the same setup kwargs, produces idle
 frames that ARE decoder output — pixel-consistent with speech by construction.
 
-On the pod:
+On the pod, in a JupyterLab terminal:
 
-    cd /opt/livetalking            # or /workspace/LiveTalking
+    cd /opt/livetalking
+    source docker/ditto-env.sh     # REQUIRED — see below
+    mv data/avatars/ditto_woman/idle.mp4 data/avatars/ditto_woman/idle.mp4.bak
     python scripts/ditto_make_idle.py --avatar ditto_woman
 
-It reads the same DITTO_* env vars the server uses, so run it in the same shell
-(or after sourcing the same template env) or the clip will not match.
+The source line is not optional. start.sh exports DITTO_* inside the server's
+own process, so a fresh shell does not see them and this script would silently
+fall back to different defaults (EMO=4, ONLINE=0 instead of the server's 0 and
+1) — producing an idle clip that does not match, with no error. It prints the
+kwargs it used; check them against the server's "ditto setup kwargs:" log line.
+
 Re-run it whenever DITTO_MAX_SIZE / DITTO_STEPS / DITTO_EXP / DITTO_EMO change.
+data/ is a symlink to the network volume, so the result survives pod restarts.
 """
 
 import os

@@ -41,7 +41,12 @@ def test_avatar_frontend_contract():
 
 
 def test_ditto_defaults_to_fast_high_resolution_rendering():
-    script = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
+    script = (ROOT / "docker" / "ditto-env.sh").read_text(encoding="utf-8")
+    # Sourced, not duplicated: a shell in JupyterLab must be able to reproduce
+    # the server's exact rendering parameters before regenerating idle.mp4.
+    start = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")
+    assert 'source "$APP_ROOT/docker/ditto-env.sh"' in start
+    assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script

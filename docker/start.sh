@@ -8,15 +8,11 @@ CACHE_ROOT=${CACHE_ROOT:-$WORKSPACE_ROOT/cache}
 AVATAR_ID=${AVATAR_ID:-ditto_woman}
 DEFAULT_AVATAR_ROOT=/opt/default-avatars
 
-OLD_MODEL_ROOT="$WORKSPACE_ROOT/ditto-talkinghead/checkpoints"
-if [[ -n "${DITTO_CHECKPOINTS:-}" ]]; then
-    MODEL_ROOT="$DITTO_CHECKPOINTS"
-elif [[ -f "$OLD_MODEL_ROOT/ditto_cfg/v0.4_hubert_cfg_trt_online.pkl" && \
-        -f "$OLD_MODEL_ROOT/ditto_trt_Ampere_Plus/warp_network_fp16.engine" ]]; then
-    MODEL_ROOT="$OLD_MODEL_ROOT"
-else
-    MODEL_ROOT="$WORKSPACE_ROOT/models/ditto"
-fi
+# MODEL_ROOT + every DITTO_*/ASR_* default. Sourced (not duplicated) so a shell
+# in JupyterLab can reproduce the server's exact rendering parameters — see the
+# header of docker/ditto-env.sh.
+# shellcheck source=docker/ditto-env.sh
+source "$APP_ROOT/docker/ditto-env.sh"
 
 if compgen -G "$WORKSPACE_ROOT/LiveTalking/data/avatars/$AVATAR_ID/source.*" >/dev/null; then
     DATA_ROOT="$WORKSPACE_ROOT/LiveTalking/data"
@@ -77,28 +73,6 @@ if [[ ! -f "$MODEL_ROOT/ditto_cfg/v0.4_hubert_cfg_trt_online.pkl" || \
         --include "ditto_cfg/*" "ditto_trt_Ampere_Plus/*" \
         --local-dir "$MODEL_ROOT"
 fi
-
-export DITTO_REPO="$DITTO_ROOT"
-export DITTO_CFG=${DITTO_CFG:-$MODEL_ROOT/ditto_cfg/v0.4_hubert_cfg_trt_online.pkl}
-export DITTO_DATA_ROOT=${DITTO_DATA_ROOT:-$MODEL_ROOT/ditto_trt_Ampere_Plus}
-export DITTO_STEPS=${DITTO_STEPS:-5}
-export DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}
-export DITTO_ONLINE=${DITTO_ONLINE:-1}
-export DITTO_EMO=${DITTO_EMO:-0}
-export DITTO_SMO_K_D=${DITTO_SMO_K_D:-1}
-export DITTO_EXP=${DITTO_EXP:-0.85}
-export DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}
-export DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}
-export DITTO_HOLD=${DITTO_HOLD:-0.10}
-export DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}
-export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}
-# 370 held the last generated frame frozen for 370-160=210ms before the blend
-# even started, which IS the visible pause at the end of a sentence. The hold
-# only has to cover the DITTO_AV_OFFSET_MS audio backlog (60ms), so 220 = 60ms
-# hold + 160ms blend. Raise it again if the tail of a sentence gets clipped.
-export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}
-export ASR_MODEL=${ASR_MODEL:-Qwen/Qwen3-ASR-0.6B}
-export ASR_DEVICE=${ASR_DEVICE:-cuda:0}
 
 cd "$APP_ROOT"
 exec python app.py \
