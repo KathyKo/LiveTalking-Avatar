@@ -30,8 +30,11 @@ def test_avatar_frontend_contract():
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
     assert "function semanticBoundary(s, force = false)" in html
-    assert "const HARD_MAX = 240;" in html
-    assert "const CONTINUATION_PAUSE_MS = 80;" in html
+    semantic = html.split("function semanticBoundary", 1)[1].split("function addBubble", 1)[0]
+    assert "HARD_MAX" not in semantic
+    assert "lastSpace" not in semantic
+    assert "s.startsWith(' - ', i)" in semantic
+    assert "pauseMs: 280" in semantic
     assert "paragraph ? 900 : 520" in html
     assert "pauseMs: 760" in html
     assert "'excl'" in html
