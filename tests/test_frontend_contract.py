@@ -50,7 +50,10 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
     assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}" in script
-    assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-370}" in script
+    # 220 = 60ms hold (covers the DITTO_AV_OFFSET_MS audio backlog) + 160ms blend.
+    # 370 left the last generated frame frozen for 210ms before the blend even
+    # started, which was the visible pause at the end of every sentence.
+    assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}" in script
 
 
 def test_ditto_exposes_timing_events():

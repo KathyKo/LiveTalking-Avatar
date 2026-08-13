@@ -24,17 +24,8 @@ else
     DATA_ROOT=${DATA_ROOT:-$WORKSPACE_ROOT/data}
 fi
 
-mkdir -p "$DATA_ROOT/avatars" "$MODEL_ROOT" "$CACHE_ROOT/modelscope" "$CACHE_ROOT/huggingface"
-for bundled_avatar in "$DEFAULT_AVATAR_ROOT"/*; do
-    [[ -d "$bundled_avatar" ]] || continue
-    bundled_id=$(basename "$bundled_avatar")
-    if ! compgen -G "$DATA_ROOT/avatars/$bundled_id/source.*" >/dev/null; then
-        cp -a "$bundled_avatar" "$DATA_ROOT/avatars/$bundled_id"
-        echo "Installed bundled avatar: $bundled_id"
-    fi
-done
-ln -sfn "$DATA_ROOT" "$APP_ROOT/data"
-
+# Jupyter comes up before any /workspace I/O: copying avatars onto a cold
+# network volume can take minutes, and that is exactly when we need a shell.
 JUPYTER_TOKEN=${JUPYTER_TOKEN:-$(python -c 'import secrets; print(secrets.token_urlsafe(24))')}
 echo "=== livetalking-avatar build ${BUILD_SHA:-unknown} ==="
 echo "JupyterLab: http://<pod-host>:8888/?token=$JUPYTER_TOKEN"
@@ -46,6 +37,17 @@ jupyter lab \
     --ServerApp.root_dir="$WORKSPACE_ROOT" \
     --ServerApp.allow_remote_access=True \
     --IdentityProvider.token="$JUPYTER_TOKEN" &
+
+mkdir -p "$DATA_ROOT/avatars" "$MODEL_ROOT" "$CACHE_ROOT/modelscope" "$CACHE_ROOT/huggingface"
+for bundled_avatar in "$DEFAULT_AVATAR_ROOT"/*; do
+    [[ -d "$bundled_avatar" ]] || continue
+    bundled_id=$(basename "$bundled_avatar")
+    if ! compgen -G "$DATA_ROOT/avatars/$bundled_id/source.*" >/dev/null; then
+        cp -a "$bundled_avatar" "$DATA_ROOT/avatars/$bundled_id"
+        echo "Installed bundled avatar: $bundled_id"
+    fi
+done
+ln -sfn "$DATA_ROOT" "$APP_ROOT/data"
 
 export MODELSCOPE_CACHE=${MODELSCOPE_CACHE:-$CACHE_ROOT/modelscope}
 export HF_HOME=${HF_HOME:-$CACHE_ROOT/huggingface}
@@ -90,7 +92,11 @@ export DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}
 export DITTO_HOLD=${DITTO_HOLD:-0.10}
 export DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}
 export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-60}
-export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-370}
+# 370 held the last generated frame frozen for 370-160=210ms before the blend
+# even started, which IS the visible pause at the end of a sentence. The hold
+# only has to cover the DITTO_AV_OFFSET_MS audio backlog (60ms), so 220 = 60ms
+# hold + 160ms blend. Raise it again if the tail of a sentence gets clipped.
+export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}
 export ASR_MODEL=${ASR_MODEL:-Qwen/Qwen3-ASR-0.6B}
 export ASR_DEVICE=${ASR_DEVICE:-cuda:0}
 

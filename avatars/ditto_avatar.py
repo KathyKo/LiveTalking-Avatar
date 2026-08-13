@@ -186,6 +186,49 @@ def _is_final_audio_event(metadata):
             and metadata.get("final") is not False)
 
 
+def setup_kwargs_from_env():
+    """Ditto setup() kwargs for the current env — the single source of truth.
+
+    scripts/ditto_make_idle.py calls this too: an idle clip rendered with even
+    slightly different kwargs will not match generated speech pixel for pixel,
+    and the mismatch is exactly what shows up as a seam at the switch to idle.
+    """
+    # Base call = the working "大牙" baseline: Ditto's DEFAULT motion keys.
+    # Do NOT add use_d_keys here — it restricts the applied keys and flattens
+    # the mouth so the output looks like raw source playback (reverted).
+    setup_kwargs = dict(
+        sampling_timesteps=int(os.environ.get("DITTO_STEPS", "5")),
+        max_size=int(os.environ.get("DITTO_MAX_SIZE", "896")),
+        emo=int(os.environ.get("DITTO_EMO", "4")),
+        online_mode=os.environ.get("DITTO_ONLINE", "0") == "1",
+    )
+    # Official mouth/expression-shaping knobs — the correct way to tame the
+    # mouth (never use_d_keys). Forwarded ONLY when the env var is set, so the
+    # default call stays identical to the baseline. If a name doesn't match the
+    # installed Ditto build, setup() errors only when you opt into that var.
+    #   DITTO_FADE_TYPE  crossfade style between online chunks (e.g. d0)
+    #   DITTO_OVERLAP    online chunk overlap (overlap_v2, frames)
+    #   DITTO_SMO_K_D    smoothing kernel over driving motion
+    #   DITTO_SMO_K_S    smoothing kernel over source motion
+    if os.environ.get("DITTO_FADE_TYPE"):
+        setup_kwargs["fade_type"] = os.environ["DITTO_FADE_TYPE"]
+    if os.environ.get("DITTO_OVERLAP"):
+        setup_kwargs["overlap_v2"] = int(os.environ["DITTO_OVERLAP"])
+    if os.environ.get("DITTO_SMO_K_D"):
+        setup_kwargs["smo_k_d"] = int(os.environ["DITTO_SMO_K_D"])
+    if os.environ.get("DITTO_SMO_K_S"):
+        setup_kwargs["smo_k_s"] = int(os.environ["DITTO_SMO_K_S"])
+    # DITTO_EXP: scale ONLY the expression/mouth amplitude → smaller mouth
+    # WITHOUT blurring lip-sync (unlike smo_k_d, which smears the shapes).
+    # Keep the head keys (pitch/yaw/roll/t) at full: the old bug passed a bare
+    # {"exp": x}, dropping them, so the head froze and it looked like raw
+    # source playback. motion_stitch applies (v - d0[k]) * use_d_keys[k] per key.
+    if os.environ.get("DITTO_EXP"):
+        _e = float(os.environ["DITTO_EXP"])
+        setup_kwargs["use_d_keys"] = {"exp": _e, "pitch": 1.0, "yaw": 1.0, "roll": 1.0, "t": 1.0}
+    return setup_kwargs
+
+
 def load_model():
     return {
         "cfg_pkl": os.environ.get(
@@ -849,39 +892,7 @@ class DittoReal(BaseAvatar):
         #                   lever; 15 is ~3x faster with little visible loss.
         #   DITTO_MAX_SIZE  longest-edge the pipeline processes/outputs at
         #                   (default 1920). 640 is plenty for a talking head.
-        # Base call = the working "大牙" baseline: Ditto's DEFAULT motion keys.
-        # Do NOT add use_d_keys here — it restricts the applied keys and flattens
-        # the mouth so the output looks like raw source playback (reverted).
-        setup_kwargs = dict(
-            sampling_timesteps=int(os.environ.get("DITTO_STEPS", "5")),
-            max_size=int(os.environ.get("DITTO_MAX_SIZE", "896")),
-            emo=int(os.environ.get("DITTO_EMO", "4")),
-            online_mode=os.environ.get("DITTO_ONLINE", "0") == "1",
-        )
-        # Official mouth/expression-shaping knobs — the correct way to tame the
-        # mouth (never use_d_keys). Forwarded ONLY when the env var is set, so the
-        # default call stays identical to the baseline. If a name doesn't match the
-        # installed Ditto build, setup() errors only when you opt into that var.
-        #   DITTO_FADE_TYPE  crossfade style between online chunks (e.g. d0)
-        #   DITTO_OVERLAP    online chunk overlap (overlap_v2, frames)
-        #   DITTO_SMO_K_D    smoothing kernel over driving motion
-        #   DITTO_SMO_K_S    smoothing kernel over source motion
-        if os.environ.get("DITTO_FADE_TYPE"):
-            setup_kwargs["fade_type"] = os.environ["DITTO_FADE_TYPE"]
-        if os.environ.get("DITTO_OVERLAP"):
-            setup_kwargs["overlap_v2"] = int(os.environ["DITTO_OVERLAP"])
-        if os.environ.get("DITTO_SMO_K_D"):
-            setup_kwargs["smo_k_d"] = int(os.environ["DITTO_SMO_K_D"])
-        if os.environ.get("DITTO_SMO_K_S"):
-            setup_kwargs["smo_k_s"] = int(os.environ["DITTO_SMO_K_S"])
-        # DITTO_EXP: scale ONLY the expression/mouth amplitude → smaller mouth
-        # WITHOUT blurring lip-sync (unlike smo_k_d, which smears the shapes).
-        # Keep the head keys (pitch/yaw/roll/t) at full: the old bug passed a bare
-        # {"exp": x}, dropping them, so the head froze and it looked like raw
-        # source playback. motion_stitch applies (v - d0[k]) * use_d_keys[k] per key.
-        if os.environ.get("DITTO_EXP"):
-            _e = float(os.environ["DITTO_EXP"])
-            setup_kwargs["use_d_keys"] = {"exp": _e, "pitch": 1.0, "yaw": 1.0, "roll": 1.0, "t": 1.0}
+        setup_kwargs = setup_kwargs_from_env()
         logger.info("ditto setup kwargs: %s", setup_kwargs)
         _t = time.perf_counter()
         self.sdk.setup(self.source_path, f"/tmp/ditto_{self.opt.sessionid}.mp4",
