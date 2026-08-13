@@ -21,7 +21,7 @@ from avatars.ditto_avatar import (  # noqa: E402
 CHUNKSIZE = (3, 5, 2)
 SPLIT_LEN = int(sum(CHUNKSIZE) * 0.04 * 16000) + 80
 FPS = 25
-GENERATOR_VERSION = 2
+GENERATOR_VERSION = 3
 
 
 class Collector:
@@ -120,9 +120,12 @@ def main():
     sys.path.insert(0, args.ditto_repo)
     from stream_pipeline_online import StreamSDK
 
-    print(f"source={source}\nkwargs={kwargs}")
+    print(f"speech_source={source}\nidle_source={original_idle}\nkwargs={kwargs}")
     sdk = StreamSDK(args.cfg, args.sdk_data_root)
-    sdk.setup(source, "/tmp/ditto_make_idle_dummy.mp4", **kwargs)
+    # Use the recorded closed-mouth idle as this isolated SDK's source. Using
+    # the speaking source here leaks its mouth motion into silence and makes the
+    # generated clip look like source.mp4 playback before speech begins.
+    sdk.setup(original_idle, "/tmp/ditto_make_idle_dummy.mp4", **kwargs)
     neutralize_sdk_source_lips(sdk, original_idle)
 
     collector = Collector()

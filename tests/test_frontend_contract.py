@@ -54,7 +54,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-80}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-100}" in script
     assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}" in script
     assert "DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-1}" in script
 
@@ -66,9 +66,12 @@ def test_generated_idle_is_optional_and_preserves_original():
 
     assert 'if [[ "$DITTO_GENERATE_IDLE" == "1" ]]' in start
     assert "WARNING: generated idle failed; using original idle.mp4" in start
-    assert '("idle.generated.mp4", "idle.mp4")' in avatar
+    assert 'os.environ.get("DITTO_GENERATE_IDLE", "1") == "1"' in avatar
+    assert '("idle.generated.mp4", "idle.mp4") if use_generated else ("idle.mp4",)' in avatar
     assert 'not os.path.exists(idle_path + ".json")' in avatar
     assert "neutralize_sdk_source_lips(sdk, original_idle)" in generator
+    assert 'sdk.setup(original_idle, "/tmp/ditto_make_idle_dummy.mp4"' in generator
+    assert "GENERATOR_VERSION = 3" in generator
     assert 'original_idle = os.path.join(avatar_dir, "idle.mp4")' in generator
     assert "os.replace(temporary_out, out)" in generator
     assert "os.replace(temporary_out, original_idle)" not in generator

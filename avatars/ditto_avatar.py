@@ -688,7 +688,9 @@ class DittoReal(BaseAvatar):
 
     def _load_idle_bgr(self):
         avatar_dir = os.path.dirname(self.source_path)
-        for name in ("idle.generated.mp4", "idle.mp4"):
+        use_generated = os.environ.get("DITTO_GENERATE_IDLE", "1") == "1"
+        names = ("idle.generated.mp4", "idle.mp4") if use_generated else ("idle.mp4",)
+        for name in names:
             idle_path = os.path.join(avatar_dir, name)
             if not os.path.exists(idle_path):
                 continue
@@ -734,7 +736,7 @@ class DittoReal(BaseAvatar):
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "6"))
         # Positive delays audio; negative delays video. Pairing remains exact at
         # zero, while a measured fixed display/model offset can be compensated.
-        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "80"))
+        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "100"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
         _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "370")) / 1000.0)
