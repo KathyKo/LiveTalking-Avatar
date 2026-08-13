@@ -751,7 +751,7 @@ class DittoReal(BaseAvatar):
         _START_BUFFER = int(os.environ.get("DITTO_START_BUFFER", "6"))
         # Positive delays audio; negative delays video. Pairing remains exact at
         # zero, while a measured fixed display/model offset can be compensated.
-        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "100"))
+        _OFFSET_MS = float(os.environ.get("DITTO_AV_OFFSET_MS", "140"))
         _AUDIO_DELAY_CHUNKS, _VIDEO_DELAY_FRAMES = _offset_delays(_OFFSET_MS)
         _END_HOLD = max(_HOLD, _AUDIO_DELAY_CHUNKS * 0.02)
         _FINAL_HOLD = max(0.0, float(os.environ.get("DITTO_FINAL_HOLD_MS", "370")) / 1000.0)
