@@ -40,7 +40,7 @@
 #                      AND good sync"). Builds use_d_keys with head keys kept full.
 #     DITTO_SMO_K_D    temporal smoothing of driving motion — LOW (1) = sharpest
 #                      lip-sync (<=1 disables it); HIGH = smaller-but-mushy mouth.
-#     DITTO_LIP_RESPONSE  amplify frame-to-frame lip motion only (default 1.15).
+#     DITTO_LIP_RESPONSE  amplify frame-to-frame lip motion only (default 1.2).
 #                         1.0 disables; values above 1 make opening/closing react
 #                         faster without shifting audio/video timestamps.
 #     DITTO_SMO_K_S    smoothing of source (head/body) motion — NOT mouth-related
@@ -980,7 +980,7 @@ class DittoReal(BaseAvatar):
         logger.info("[ditto-timing] sdk.setup (source processing): %.2fs", time.perf_counter() - _t)
         self._neutralize_source_lips()
         install_lip_response(
-            self.sdk, os.environ.get("DITTO_LIP_RESPONSE", "1.15"))
+            self.sdk, os.environ.get("DITTO_LIP_RESPONSE", "1.2"))
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:

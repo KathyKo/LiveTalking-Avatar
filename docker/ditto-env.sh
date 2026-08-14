@@ -33,10 +33,10 @@ export DITTO_DATA_ROOT=${DITTO_DATA_ROOT:-$MODEL_ROOT/ditto_trt_Ampere_Plus}
 export DITTO_STEPS=${DITTO_STEPS:-5}
 export DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}
 export DITTO_EMO=${DITTO_EMO:-0}
-export DITTO_EXP=${DITTO_EXP:-0.75}
+export DITTO_EXP=${DITTO_EXP:-0.7}
 export DITTO_ONLINE=${DITTO_ONLINE:-1}
 export DITTO_SMO_K_D=${DITTO_SMO_K_D:-1}
-export DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.15}
+export DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.2}
 
 # Playback timing. Does not affect how a frame is rendered.
 export DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}

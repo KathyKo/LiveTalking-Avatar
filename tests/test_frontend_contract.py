@@ -36,6 +36,8 @@ def test_avatar_frontend_contract():
     assert "Press to Talk" not in html
     assert 'onclick="sendText()"' not in html
     assert "function renderMicButton(listening)" in html
+    assert '<span><i class="bi bi-chat-text-fill"></i> Chat</span>' not in html
+    assert '<select id="txtType" class="visually-hidden"' in html
     assert ".chat-bubble { max-width: 94%;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
@@ -62,9 +64,9 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert 'source "$APP_ROOT/docker/ditto-env.sh"' in start
     assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
-    assert "DITTO_EXP=${DITTO_EXP:-0.75}" in script
+    assert "DITTO_EXP=${DITTO_EXP:-0.7}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}" in script
-    assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.15}" in script
+    assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.2}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
