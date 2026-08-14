@@ -1,4 +1,5 @@
 import os
+import re
 import time
 import numpy as np
 from elevenlabs.client import ElevenLabs
@@ -14,6 +15,27 @@ _TARGET_RMS = float(os.environ.get("TTS_TARGET_RMS", "0.06"))   # ~ -24 dBFS
 _MAX_GAIN = float(os.environ.get("TTS_MAX_GAIN", "4.0"))
 _CEILING = float(os.environ.get("TTS_CEILING", "0.95"))
 _ESTIMATE_FRAMES = int(os.environ.get("TTS_ESTIMATE_FRAMES", "8"))   # 8 x 20ms
+_PHONEME_TAIL_FRAMES = max(
+    1, int(round(float(os.environ.get("TTS_PHONEME_CLOSE_MS", "80")) / 20.0)))
+_N_CLOSE_STRENGTH = float(os.environ.get("TTS_N_CLOSE_STRENGTH", "0.45"))
+
+
+def _terminal_lip_close_strength(text):
+    """Return a conservative visual closure hint for the final English sound.
+
+    This is deliberately a small spelling heuristic, not a phoneme recognizer.
+    It covers the visible closures requested for common segment endings without
+    adding a pronunciation model to the streaming path.
+    """
+    words = re.findall(r"[A-Za-z]+", text or "")
+    if not words:
+        return 0.0
+    word = words[-1].lower()
+    if re.search(r"(?:[mbp]|[mbp]e)$", word):
+        return 1.0
+    if re.search(r"(?:n|ne)$", word):
+        return max(0.0, min(_N_CLOSE_STRENGTH, 1.0))
+    return 0.0
 
 
 def _segment_gain(frames):
@@ -77,7 +99,14 @@ class ElevenLabsTTS(BaseTTS):
         started = time.perf_counter()
         # Frames held back while the segment's gain is still being estimated.
         held = []
+        phoneme_tail = []
         gain = None
+
+        def queue_frame(frame):
+            phoneme_tail.append(frame)
+            if len(phoneme_tail) > _PHONEME_TAIL_FRAMES:
+                self._emit([phoneme_tail.pop(0)], text, textevent, gain)
+
         try:
             chunks = self._client.text_to_speech.stream(
                 voice_id=self._voice_id,
@@ -101,13 +130,14 @@ class ElevenLabsTTS(BaseTTS):
                     del pcm_buffer[:frame_bytes]
                     frame = np.frombuffer(raw_frame, dtype=np.int16).astype(np.float32) / 32768.0
                     if gain is not None:
-                        self._emit([frame], text, textevent, gain)
+                        queue_frame(frame)
                         continue
                     held.append(frame)
                     if len(held) >= _ESTIMATE_FRAMES:
                         gain = _segment_gain(held)
                         logger.info("elevenlabs segment gain: %.2fx", gain)
-                        self._emit(held, text, textevent, gain)
+                        for buffered_frame in held:
+                            queue_frame(buffered_frame)
                         held = []
         except Exception:
             logger.exception("elevenlabs tts error")
@@ -117,13 +147,26 @@ class ElevenLabsTTS(BaseTTS):
         usable_bytes = len(pcm_buffer) - (len(pcm_buffer) % 2)
         if usable_bytes:
             frame = np.frombuffer(bytes(pcm_buffer[:usable_bytes]), dtype=np.int16).astype(np.float32) / 32768.0
-            held.append(np.pad(frame, (0, self.chunk - len(frame))))
+            frame = np.pad(frame, (0, self.chunk - len(frame)))
+            if gain is None:
+                held.append(frame)
+            else:
+                queue_frame(frame)
         if held:
             # Segment shorter than the estimate window: gain it on what we got.
             if gain is None:
                 gain = _segment_gain(held)
                 logger.info("elevenlabs segment gain: %.2fx (short segment)", gain)
-            self._emit(held, text, textevent, gain)
+            for buffered_frame in held:
+                queue_frame(buffered_frame)
+
+        close_strength = _terminal_lip_close_strength(text)
+        tail_count = len(phoneme_tail)
+        for index, frame in enumerate(phoneme_tail, 1):
+            tail_event = dict(textevent)
+            if close_strength:
+                tail_event["lip_close_strength"] = close_strength * index / tail_count
+            self._emit([frame], text, tail_event, gain)
 
         self._send_silence_tail(text, textevent, final)
         self._previous_text = text

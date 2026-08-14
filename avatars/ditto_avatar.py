@@ -238,7 +238,7 @@ def install_lip_response(sdk, response):
 
 
 class _SemanticPauseMotion:
-    """Apply sentence-pause lip closure immediately before motion stitching."""
+    """Apply phoneme/pause lip closure immediately before motion stitching."""
 
     def __init__(self, motion_stitch, next_pause, neutral_lips, close_frames):
         object.__setattr__(self, "_obj", motion_stitch)
@@ -248,21 +248,32 @@ class _SemanticPauseMotion:
         object.__setattr__(self, "_pause_run", 0)
 
     def __call__(self, x_s_info, x_d_info, **kwargs):
-        paused = bool(self._next_pause())
-        if paused:
+        marker = self._next_pause()
+        if isinstance(marker, tuple):
+            semantic_pause, close_strength = marker
+        else:
+            semantic_pause = bool(marker)
+            close_strength = 1.0 if semantic_pause else 0.0
+        close_strength = max(0.0, min(float(close_strength), 1.0))
+        if semantic_pause:
             run = object.__getattribute__(self, "_pause_run") + 1
             object.__setattr__(self, "_pause_run", run)
+            alpha = min(1.0, run / object.__getattribute__(self, "_close_frames"))
+        elif close_strength:
+            object.__setattr__(self, "_pause_run", 0)
+            alpha = close_strength
+        else:
+            object.__setattr__(self, "_pause_run", 0)
+            alpha = 0.0
+        if alpha:
             result = dict(x_d_info)
             exp = np.array(x_d_info["exp"], copy=True)
             lips = exp.reshape(-1, 3)
-            alpha = min(1.0, run / object.__getattribute__(self, "_close_frames"))
             neutral = object.__getattribute__(self, "_neutral_lips")
             lip_indices = list(_LIP_KEYPOINTS)
             lips[lip_indices] = (1.0 - alpha) * lips[lip_indices] + alpha * neutral
             result["exp"] = exp
             x_d_info = result
-        else:
-            object.__setattr__(self, "_pause_run", 0)
         return self._obj(x_s_info, x_d_info, **kwargs)
 
     def __getattr__(self, name):
@@ -573,16 +584,22 @@ class DittoReal(BaseAvatar):
         self._prof_log()
 
     def _queue_pause_packet(self, datainfo):
-        self._pause_packets.append(bool(datainfo.get("semantic_pause")))
+        self._pause_packets.append((
+            bool(datainfo.get("semantic_pause")),
+            max(0.0, min(float(datainfo.get("lip_close_strength", 0.0)), 1.0)),
+        ))
         if len(self._pause_packets) == _AUDIO_CHUNKS_PER_FRAME:
-            self._pause_frames.put(all(self._pause_packets))
+            semantic = all(packet[0] for packet in self._pause_packets)
+            strength = sum(packet[1] for packet in self._pause_packets) / len(
+                self._pause_packets)
+            self._pause_frames.put((semantic, strength))
             self._pause_packets.clear()
 
     def _next_pause_frame(self):
         try:
             return self._pause_frames.get_nowait()
         except queue.Empty:
-            return False
+            return False, 0.0
 
     def _clear_pause_state(self):
         pause_frames = getattr(self, "_pause_frames", None)
@@ -645,7 +662,10 @@ class DittoReal(BaseAvatar):
         # then reset — otherwise leftover audio drifts into the next utterance.
         if datainfo.get('status') == 'end':
             if self._pause_packets:
-                self._pause_frames.put(all(self._pause_packets))
+                semantic = all(packet[0] for packet in self._pause_packets)
+                strength = sum(packet[1] for packet in self._pause_packets) / len(
+                    self._pause_packets)
+                self._pause_frames.put((semantic, strength))
                 self._pause_packets.clear()
             logger.info("ditto final audio received: flushing tail")
             self._final_pending = True

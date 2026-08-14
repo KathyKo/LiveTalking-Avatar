@@ -28,7 +28,10 @@ def test_avatar_frontend_contract():
     assert "html, body {" in html
     assert "overflow: hidden;" in html
     assert "height: 100dvh" in html
-    assert "grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr)" in html
+    assert "grid-template-columns: minmax(0, 1.1fr) minmax(380px, 1fr)" in html
+    assert "grid-template-rows: minmax(0, 1fr) 76px" in html
+    assert html.index('class="chat-toolbar"') < html.index('id="chatResponse"')
+    assert html.index('id="chatResponse"') < html.index('class="chat-composer"')
     assert "#chatResponse { flex: 1;" in html
     assert "overflow-y: auto !important" in html
     assert 'id="btnMic" type="button" onclick="toggleMic()"' in html
@@ -109,9 +112,11 @@ def test_elevenlabs_forwards_pcm_while_streaming():
     tts = (ROOT / "tts" / "elevenlabs_tts.py").read_text(encoding="utf-8")
     assert 'raw = b"".join(chunks)' not in tts
     assert "for pcm_chunk in chunks:" in tts
-    # Frames leave while the stream is still arriving. Only the segment's first
-    # _ESTIMATE_FRAMES are held back, to fix its loudness against other segments.
-    assert "self._emit([frame], text, textevent, gain)" in tts
+    # Frames leave while the stream is still arriving. A fixed, short rolling
+    # tail is retained so the terminal phoneme can carry a lip-closure hint.
+    assert "queue_frame(frame)" in tts
+    assert "len(phoneme_tail) > _PHONEME_TAIL_FRAMES" in tts
+    assert "self._emit([phoneme_tail.pop(0)], text, textevent, gain)" in tts
     assert "np.clip(frame * gain, -1.0, 1.0), eventpoint)" in tts
     assert "if len(held) >= _ESTIMATE_FRAMES:" in tts
     assert "re.split" not in tts

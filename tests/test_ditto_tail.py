@@ -121,6 +121,26 @@ def test_semantic_pause_closes_only_lips_over_three_frames():
     np.testing.assert_allclose(outputs[2]["exp"].reshape(21, 3)[0], 1.0)
 
 
+def test_terminal_phoneme_closure_can_be_partial_or_complete():
+    from avatars.ditto_avatar import _LIP_KEYPOINTS, _SemanticPauseMotion
+
+    class Stitch:
+        def __call__(self, _source, driving, **_kwargs):
+            return driving
+
+    markers = iter([(False, 0.45), (False, 1.0), (False, 0.0)])
+    neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
+    wrapper = _SemanticPauseMotion(Stitch(), lambda: next(markers), neutral, 3)
+    source = {"exp": np.ones((1, 63), dtype=np.float32)}
+
+    outputs = [wrapper({}, source) for _ in range(3)]
+    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
+
+    np.testing.assert_allclose(lips[0], 0.55)
+    np.testing.assert_allclose(lips[1], 0.0)
+    np.testing.assert_allclose(lips[2], 1.0)
+
+
 def test_semantic_pause_requires_a_full_40ms_silence_frame():
     from avatars.ditto_avatar import DittoReal
 
@@ -130,11 +150,15 @@ def test_semantic_pause_requires_a_full_40ms_silence_frame():
 
     avatar._queue_pause_packet({})
     avatar._queue_pause_packet({"semantic_pause": True})
-    assert avatar._next_pause_frame() is False
+    assert avatar._next_pause_frame() == (False, 0.0)
 
     avatar._queue_pause_packet({"semantic_pause": True})
     avatar._queue_pause_packet({"semantic_pause": True})
-    assert avatar._next_pause_frame() is True
+    assert avatar._next_pause_frame() == (True, 0.0)
+
+    avatar._queue_pause_packet({"lip_close_strength": 0.25})
+    avatar._queue_pause_packet({"lip_close_strength": 0.75})
+    assert avatar._next_pause_frame() == (False, 0.5)
 
 
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
@@ -272,6 +296,34 @@ def _load_segment_gain():
     namespace = {"np": np, "os": __import__("os")}
     exec(compile(ast.Module(body=wanted, type_ignores=[]), "<gain>", "exec"), namespace)
     return namespace["_segment_gain"], namespace["_TARGET_RMS"]
+
+
+def _load_terminal_lip_close_strength():
+    source = (Path(__file__).parents[1] / "tts" / "elevenlabs_tts.py").read_text(
+        encoding="utf-8"
+    )
+    tree = ast.parse(source)
+    wanted = [
+        node for node in tree.body
+        if (isinstance(node, ast.Assign)
+            and any(getattr(target, "id", "") == "_N_CLOSE_STRENGTH"
+                    for target in node.targets))
+        or (isinstance(node, ast.FunctionDef)
+            and node.name == "_terminal_lip_close_strength")
+    ]
+    namespace = {"re": __import__("re"), "os": __import__("os")}
+    exec(compile(ast.Module(body=wanted, type_ignores=[]), "<phoneme>", "exec"), namespace)
+    return namespace["_terminal_lip_close_strength"]
+
+
+def test_terminal_lip_close_strength_distinguishes_bilabial_and_nasal_endings():
+    strength = _load_terminal_lip_close_strength()
+
+    assert strength("Help them.") == 1.0
+    assert strength("Please stop!") == 1.0
+    assert strength("You can:") == 0.45
+    assert strength("Around them.") == 1.0
+    assert strength("Welcome today.") == 0.0
 
 
 def test_segment_gain_matches_loudness_across_segments():
