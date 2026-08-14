@@ -80,6 +80,25 @@ def test_idle_transition_matches_pose_before_blending():
     assert len(_blend_to_idle(final, [fitted_idle] * 4)) == 4
 
 
+def test_lip_response_sharpens_only_lip_motion():
+    from avatars.ditto_avatar import _LIP_KEYPOINTS, _sharpen_lip_sequence
+
+    sequence = np.zeros((1, 3, 265), dtype=np.float32)
+    expression = sequence[..., -63:].reshape(1, 3, 21, 3)
+    expression[0, 1, list(_LIP_KEYPOINTS), :] = 1.0
+    expression[0, 2, list(_LIP_KEYPOINTS), :] = 1.5
+    expression[0, :, 0, :] = np.array([0.0, 2.0, 4.0])[:, None]
+
+    sharpened, previous = _sharpen_lip_sequence(sequence, 1.15)
+    sharpened_exp = sharpened[..., -63:].reshape(1, 3, 21, 3)
+
+    np.testing.assert_allclose(sharpened_exp[0, 0, list(_LIP_KEYPOINTS), :], 0.0)
+    np.testing.assert_allclose(sharpened_exp[0, 1, list(_LIP_KEYPOINTS), :], 1.15)
+    np.testing.assert_allclose(sharpened_exp[0, 2, list(_LIP_KEYPOINTS), :], 1.575)
+    np.testing.assert_allclose(sharpened_exp[0, :, 0, :], expression[0, :, 0, :])
+    np.testing.assert_allclose(previous, 1.5)
+
+
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
     from avatars.ditto_avatar import DittoReal
 

@@ -16,12 +16,17 @@
             --card-bg: rgba(255,255,255,0.85);
             --radius: 14px;
         }
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+        }
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background: linear-gradient(135deg, #e0eafc 0%, #cfdef3 100%);
+            background: #fff;
             color: #1e293b;
-            min-height: 100vh;
-            padding-bottom: 40px;
+            min-height: 0;
+            margin: 0;
         }
         .navbar-brand { font-weight: 700; }
         .glass-card {
@@ -81,28 +86,28 @@
         .chat-bubble { max-width: 94%; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
         .chat-user { background: #4361ee; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
         .chat-bot { background: rgba(0,0,0,0.06); color: #1e293b; margin-right: auto; border-bottom-left-radius: 4px; }
-        .app-shell { padding-top: 24px; }
-        .main-layout { display: flex; gap: 20px; align-items: center; min-height: calc(100vh - 48px); }
-        .avatar-pane { flex: 1.8 1 0; max-width: none; min-width: 0; }
-        .chat-pane { flex: 1 1 0; min-width: 340px; }
-        .avatar-stage { position: relative; display: flex; align-items: center; justify-content: center; }
-        .avatar-pane .glass-card { background: transparent; border: 0; box-shadow: none; margin: 0; }
+        .app-shell { width: 100%; height: 100dvh; padding: 0 !important; overflow: hidden; background: #fff; }
+        .main-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr); width: 100%; height: 100%; min-height: 0; background: #fff; }
+        .avatar-pane { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+        .chat-pane { min-width: 0; min-height: 0; height: 100%; overflow: hidden; background: #fff; border-left: 1px solid #e5e7eb; }
+        .avatar-stage { position: relative; display: flex; flex: 1; min-height: 0; align-items: stretch; justify-content: center; overflow: hidden; }
+        .avatar-pane .glass-card { flex: 1; min-height: 0; background: transparent; border: 0; box-shadow: none; margin: 0; overflow: hidden; }
         .avatar-pane .card-header { display: none !important; }
-        .avatar-pane .card-body { padding: 0; }
+        .avatar-pane .card-body { height: 100%; min-height: 0; padding: 0; display: flex; flex-direction: column; }
         .avatar-pane .mt-3 { margin-top: 0 !important; }
-        #video { background: #999 !important; }
+        #video { width: 100%; height: 100%; max-height: none; background: #999 !important; object-fit: cover; object-position: center; border-radius: 0; }
         .avatar-selector {
             display: inline-flex;
             align-items: center;
             gap: 8px;
             padding: 5px 7px 5px 11px;
-            background: rgba(255,255,255,0.9);
+            background: #fff;
             border: 1px solid #d8e0ec;
             border-radius: 8px;
             box-shadow: 0 5px 16px rgba(30,41,59,0.1);
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-        .avatar-selector-row { margin-top: 14px; text-align: center; }
+        .avatar-selector-row { flex: 0 0 62px; display: flex; align-items: center; justify-content: center; margin: 0; text-align: center; background: #fff; }
         .avatar-selector:focus-within {
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(67,97,238,0.14);
@@ -121,14 +126,16 @@
             box-shadow: none;
         }
         #avatarSelect:focus { box-shadow: none; }
-        #btnMic { margin: 56px auto 0; transform: none; z-index: 20; display: flex; align-items: center; gap: 12px; padding: 16px 34px; border: 2px solid #f97316; border-radius: 999px; background: rgba(0,0,0,0.82); color: #fff; font-weight: 600; box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
-        #btnMic.listening { border-color: #ef4444; background: rgba(127,29,29,0.92); }
-        .chat-pane .glass-card { height: calc(100vh - 56px); border-radius: 44px; margin: 0; overflow: hidden; }
-        .chat-pane .card-header { justify-content: space-between; padding: 28px 32px 12px; font-size: 1.35rem; }
+        #btnMic { flex: 0 0 42px; width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: #1597e5; color: #fff; font-size: 1.1rem; cursor: pointer; box-shadow: 0 3px 10px rgba(21,151,229,0.28); transition: background 0.2s, transform 0.2s, box-shadow 0.2s; }
+        #btnMic:hover { background: #087fc4; transform: translateY(-1px); }
+        #btnMic:active { transform: translateY(0); }
+        #btnMic.listening { background: #ef4444; box-shadow: 0 0 0 5px rgba(239,68,68,0.14); }
+        .chat-pane .glass-card { height: 100%; border: 0; border-radius: 0; box-shadow: none; margin: 0; overflow: hidden; background: #fff; }
+        .chat-pane .card-header { height: 72px; justify-content: space-between; padding: 18px 24px; font-size: 1.35rem; background: #fff; }
         .chat-pane .card-header #txtType { width: 170px; border: 0; border-bottom: 1px solid rgba(0,0,0,0.12); border-radius: 0; box-shadow: none; font-size: 1.1rem; }
-        .chat-pane .card-body { display: flex; flex-direction: column; height: calc(100% - 78px); padding: 0 24px 28px; }
-        #chatResponse { flex: 1; height: auto !important; min-height: 0 !important; border: 0 !important; background: transparent !important; }
-        .chat-composer { display: flex; align-items: center; gap: 12px; }
+        .chat-pane .card-body { display: flex; flex-direction: column; height: calc(100% - 72px); min-height: 0; padding: 0 16px 14px; background: #fff; }
+        #chatResponse { flex: 1; height: auto !important; min-height: 0 !important; overflow-y: auto !important; overscroll-behavior: contain; border: 0 !important; background: #fff !important; }
+        .chat-composer { flex: 0 0 auto; display: flex; align-items: center; gap: 10px; padding-top: 10px; background: #fff; }
         .latency-row { display: flex; flex-wrap: wrap; gap: 5px 14px; margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(0,0,0,0.08); color: #64748b; font-size: 0.72rem; }
         .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
         .chat-bot p:last-child { margin-bottom: 0; }
@@ -136,11 +143,17 @@
         .tour-qr { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
         .tour-qr img { width: 144px; height: 144px; padding: 6px; border-radius: 4px; background: #fff; }
         .tour-qr a { font-size: 0.85rem; }
-        #txtMessage { height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 1.05rem; padding: 8px 16px; overflow: hidden; }
+        #txtMessage { flex: 1; min-width: 0; height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 1.05rem; padding: 8px 16px; overflow: hidden; }
         @media (max-width: 992px) {
-            .main-layout { flex-direction: column; }
-            .avatar-pane, .chat-pane { flex: 0 0 auto; max-width: 100%; min-width: 0; width: 100%; }
-            .avatar-stage { min-height: auto; }
+            .main-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 46%) minmax(0, 54%); }
+            .avatar-pane, .chat-pane { width: 100%; height: auto; min-width: 0; min-height: 0; }
+            .chat-pane { border-left: 0; border-top: 1px solid #e5e7eb; }
+            .avatar-selector-row { flex-basis: 46px; }
+            .avatar-selector { padding-top: 2px; padding-bottom: 2px; }
+            .chat-pane .card-header { height: 58px; padding: 10px 16px; }
+            .chat-pane .card-body { height: calc(100% - 58px); padding: 0 10px 8px; }
+            .chat-composer { gap: 7px; padding-top: 7px; }
+            .btn-danger-custom { padding-left: 10px; padding-right: 10px; }
         }
     </style>
 </head>
@@ -189,7 +202,7 @@
                 <div class="card-body">
                     <div id="offerError" class="alert alert-danger mt-3" role="alert" style="display:none;"></div>
                     <div class="mt-3 avatar-stage">
-                        <video id="video" autoplay playsinline muted style="width:100%; aspect-ratio:4/3; height:auto; max-height:calc(100vh - 170px); display:block; margin:0 auto; object-fit:cover; object-position:center; border-radius:0; background:#000;"></video>
+                        <video id="video" autoplay playsinline muted></video>
                     </div>
                 </div>
             </div>
@@ -200,7 +213,6 @@
                     <select id="avatarSelect" onchange="switchAvatar()" class="form-select form-select-sm" title="Switch avatar"></select>
                 </div>
             </div>
-            <button class="btn-outline-custom btn-sm" id="btnMic" onclick="toggleMic()" title="Voice input"><i class="bi bi-mic"></i><span>Press to Talk</span></button>
         </div>
 
         <!-- Right Column: Drivers + Actions -->
@@ -218,7 +230,7 @@
                     <div id="chatResponse" style="height:calc(100vh - 420px); min-height:400px; overflow-y:auto; padding:12px; background:rgba(255,255,255,0.6); border:1px solid rgba(0,0,0,0.08); border-radius:8px; display:flex; flex-direction:column;"></div>
                     <div class="chat-composer">
                         <textarea class="form-control form-control-sm" id="txtMessage" rows="1" placeholder="Enter a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
-                        <button class="btn-primary-custom btn-sm" onclick="sendText()"><i class="bi bi-send"></i> Send</button>
+                        <button id="btnMic" type="button" onclick="toggleMic()" title="Voice input" aria-label="Voice input"><i class="bi bi-mic-fill"></i></button>
                         <button class="btn-danger-custom btn-sm" onclick="interrupt()" title="Stop the avatar talking"><i class="bi bi-stop-circle"></i> Stop</button>
                         <button class="btn-outline-custom btn-sm" onclick="document.getElementById('chatResponse').innerHTML=''" title="Clear chat"><i class="bi bi-trash"></i></button>
                     </div>
@@ -263,6 +275,15 @@ function showError(msg) {
 // --- Voice input (mic → /api/asr → textarea → send) ---
 let micWs = null, micCtx = null, micStream = null, micNode = null, micOn = false;
 
+function renderMicButton(listening) {
+    const btn = document.getElementById('btnMic');
+    const label = listening ? 'Stop listening' : 'Voice input';
+    btn.innerHTML = listening ? '<i class="bi bi-stop-fill"></i>' : '<i class="bi bi-mic-fill"></i>';
+    btn.classList.toggle('listening', listening);
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+}
+
 // The ASR server assumes 16 kHz mono. Browsers usually capture at 44.1/48 kHz;
 // sending that as-if-16k garbles recognition (wrong words, wrong language). Downsample.
 function down16k(buf, inRate) {
@@ -289,9 +310,7 @@ async function toggleMic() {
     } catch (e) { return alert('Microphone permission denied'); }
 
     micOn = true;
-    const btn = document.getElementById('btnMic');
-    btn.innerHTML = '<i class="bi bi-mic-fill"></i><span>Listening... Press to Stop</span>';
-    btn.classList.add('listening');
+    renderMicButton(true);
     document.getElementById('txtMessage').placeholder = 'Listening... click mic again to finish';
 
     const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
@@ -341,9 +360,7 @@ function stopMic(sendStop) {
         document.getElementById('txtMessage').placeholder = 'Enter a message...';
     }
     micOn = false;
-    const btn = document.getElementById('btnMic');
-    btn.innerHTML = '<i class="bi bi-mic"></i><span>Press to Talk</span>';
-    btn.classList.remove('listening');
+    renderMicButton(false);
 }
 
 // --- WebRTC ---

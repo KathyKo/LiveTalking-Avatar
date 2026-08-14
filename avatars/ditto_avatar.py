@@ -40,6 +40,9 @@
 #                      AND good sync"). Builds use_d_keys with head keys kept full.
 #     DITTO_SMO_K_D    temporal smoothing of driving motion — LOW (1) = sharpest
 #                      lip-sync (<=1 disables it); HIGH = smaller-but-mushy mouth.
+#     DITTO_LIP_RESPONSE  amplify frame-to-frame lip motion only (default 1.15).
+#                         1.0 disables; values above 1 make opening/closing react
+#                         faster without shifting audio/video timestamps.
 #     DITTO_SMO_K_S    smoothing of source (head/body) motion — NOT mouth-related
 #     DITTO_FADE_TYPE / DITTO_OVERLAP  online-chunk blending
 #
@@ -180,6 +183,56 @@ def _normalize_condition_lips(condition, neutral_exp):
     neutral_lips = np.asarray(neutral_exp).reshape(21, 3)[list(_LIP_KEYPOINTS)]
     exp[..., list(_LIP_KEYPOINTS), :] = neutral_lips
     return result
+
+
+def _sharpen_lip_sequence(sequence, response, previous_lips=None):
+    """Increase lip velocity while preserving every frame's timestamp.
+
+    Ditto stores expression as the final 63 values (21 keypoints x 3). The
+    original conversion still clips the adjusted sequence to the model's
+    learned range after this function runs.
+    """
+    result = np.array(sequence, copy=True)
+    if result.ndim != 3 or result.shape[0] != 1 or result.shape[1] == 0:
+        return result, previous_lips
+    if result.shape[-1] < 63 or response <= 1.0:
+        return result, previous_lips
+
+    exp = result[..., -63:].reshape(1, result.shape[1], 21, 3)
+    previous = None if previous_lips is None else np.asarray(previous_lips).copy()
+    lip_indices = list(_LIP_KEYPOINTS)
+    for frame_index in range(result.shape[1]):
+        current = exp[0, frame_index, lip_indices, :].copy()
+        if previous is not None:
+            exp[0, frame_index, lip_indices, :] = previous + response * (current - previous)
+        previous = current
+    return result, previous
+
+
+def install_lip_response(sdk, response):
+    """Wrap Ditto's motion conversion with lip-only temporal sharpening."""
+    response = max(1.0, min(float(response), 1.5))
+    if response <= 1.0:
+        logger.info("ditto lip response disabled")
+        return
+
+    original_cvt_fmt = sdk.audio2motion.cvt_fmt
+    previous_lips = None
+    priming_call = True
+
+    def cvt_fmt_with_lip_response(sequence):
+        nonlocal previous_lips, priming_call
+        # Online Ditto's first conversion establishes motion_stitch.d0 and is
+        # never rendered. Do not let that hidden context affect visible lips.
+        if priming_call:
+            priming_call = False
+            return original_cvt_fmt(sequence)
+        sharpened, previous_lips = _sharpen_lip_sequence(
+            sequence, response, previous_lips)
+        return original_cvt_fmt(sharpened)
+
+    sdk.audio2motion.cvt_fmt = cvt_fmt_with_lip_response
+    logger.info("ditto lip response: %.2fx", response)
 
 
 def neutralize_sdk_source_lips(sdk, idle_path):
@@ -926,6 +979,8 @@ class DittoReal(BaseAvatar):
                        **setup_kwargs)
         logger.info("[ditto-timing] sdk.setup (source processing): %.2fs", time.perf_counter() - _t)
         self._neutralize_source_lips()
+        install_lip_response(
+            self.sdk, os.environ.get("DITTO_LIP_RESPONSE", "1.15"))
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:

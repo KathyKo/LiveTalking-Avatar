@@ -25,10 +25,17 @@ def test_avatar_frontend_contract():
     assert "fetch('/avatar_timing'" in html
     assert '<audio id="audio"' not in html
     assert "stream.addTrack(evt.track)" in html
-    assert "aspect-ratio:4/3" in html
-    assert ".avatar-pane { flex: 1.8 1 0; max-width: none; min-width: 0; }" in html
-    assert ".chat-pane { flex: 1 1 0; min-width: 340px; }" in html
-    assert "max-height:calc(100vh - 170px)" in html
+    assert "html, body {" in html
+    assert "overflow: hidden;" in html
+    assert "height: 100dvh" in html
+    assert "grid-template-columns: minmax(0, 1fr) minmax(380px, 1fr)" in html
+    assert "#chatResponse { flex: 1;" in html
+    assert "overflow-y: auto !important" in html
+    assert 'id="btnMic" type="button" onclick="toggleMic()"' in html
+    assert html.count('id="btnMic"') == 1
+    assert "Press to Talk" not in html
+    assert 'onclick="sendText()"' not in html
+    assert "function renderMicButton(listening)" in html
     assert ".chat-bubble { max-width: 94%;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
@@ -57,6 +64,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
     assert "DITTO_EXP=${DITTO_EXP:-0.75}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}" in script
+    assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.15}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
