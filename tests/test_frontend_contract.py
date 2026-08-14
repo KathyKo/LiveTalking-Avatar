@@ -49,7 +49,7 @@ def test_avatar_frontend_contract():
     assert "s.startsWith(' - ', i)" in semantic
     assert "pauseMs: 280" in semantic
     assert "paragraph ? 900 : 520" in html
-    assert "pauseMs: 760" in html
+    assert "pauseMs: 800" in html
     assert "'excl'" in html
     assert "pause_ms: pauseMs" in html
     assert "final, sessionid" in html

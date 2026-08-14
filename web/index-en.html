@@ -552,7 +552,7 @@ function semanticBoundary(s, force = false) {
         }
         if (c === ':' && (i + 1 < s.length || force)) {
             const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
-            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 760 };
+            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 800 };
         }
         // A list item is a real semantic boundary. Consume the separator so
         // names such as "The Meeting Point" can never be split by length.
