@@ -55,6 +55,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert 'source "$APP_ROOT/docker/ditto-env.sh"' in start
     assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
+    assert "DITTO_EXP=${DITTO_EXP:-0.75}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}" in script
