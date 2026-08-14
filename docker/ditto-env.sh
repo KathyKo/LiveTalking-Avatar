@@ -31,7 +31,7 @@ export DITTO_DATA_ROOT=${DITTO_DATA_ROOT:-$MODEL_ROOT/ditto_trt_Ampere_Plus}
 # Rendering. These four decide what a generated frame looks like, so idle.mp4
 # must be regenerated whenever any of them changes.
 export DITTO_STEPS=${DITTO_STEPS:-5}
-export DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}
+export DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1024}
 export DITTO_EMO=${DITTO_EMO:-0}
 export DITTO_EXP=${DITTO_EXP:-0.7}
 export DITTO_ONLINE=${DITTO_ONLINE:-1}

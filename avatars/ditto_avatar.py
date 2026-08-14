@@ -238,32 +238,30 @@ def install_lip_response(sdk, response):
 
 
 class _SemanticPauseMotion:
-    """Apply sentence-pause lip closure immediately before motion stitching."""
+    """Close lips in final keypoint space after relative motion and stitching."""
 
-    def __init__(self, motion_stitch, next_pause, neutral_lips, close_frames):
+    def __init__(self, motion_stitch, next_pause, close_frames):
         object.__setattr__(self, "_obj", motion_stitch)
         object.__setattr__(self, "_next_pause", next_pause)
-        object.__setattr__(self, "_neutral_lips", np.asarray(neutral_lips).copy())
         object.__setattr__(self, "_close_frames", max(1, int(close_frames)))
         object.__setattr__(self, "_pause_run", 0)
 
     def __call__(self, x_s_info, x_d_info, **kwargs):
         paused = bool(self._next_pause())
+        x_s, x_d = self._obj(x_s_info, x_d_info, **kwargs)
         if paused:
             run = object.__getattribute__(self, "_pause_run") + 1
             object.__setattr__(self, "_pause_run", run)
-            result = dict(x_d_info)
-            exp = np.array(x_d_info["exp"], copy=True)
-            lips = exp.reshape(-1, 3)
             alpha = min(1.0, run / object.__getattribute__(self, "_close_frames"))
-            neutral = object.__getattribute__(self, "_neutral_lips")
             lip_indices = list(_LIP_KEYPOINTS)
-            lips[lip_indices] = (1.0 - alpha) * lips[lip_indices] + alpha * neutral
-            result["exp"] = exp
-            x_d_info = result
+            x_d = np.array(x_d, copy=True)
+            x_d[:, lip_indices, :] = (
+                (1.0 - alpha) * x_d[:, lip_indices, :]
+                + alpha * x_s[:, lip_indices, :]
+            )
         else:
             object.__setattr__(self, "_pause_run", 0)
-        return self._obj(x_s_info, x_d_info, **kwargs)
+        return x_s, x_d
 
     def __getattr__(self, name):
         return getattr(object.__getattribute__(self, "_obj"), name)
@@ -273,13 +271,9 @@ class _SemanticPauseMotion:
 
 
 def install_semantic_pause_closure(sdk, next_pause, close_ms=120):
-    neutral_lips = getattr(sdk, "_livetalking_neutral_lips", None)
-    if neutral_lips is None:
-        logger.warning("ditto semantic pause closure disabled: neutral lips unavailable")
-        return
     close_frames = max(1, int(round(float(close_ms) / 40.0)))
     sdk.motion_stitch = _SemanticPauseMotion(
-        sdk.motion_stitch, next_pause, neutral_lips, close_frames)
+        sdk.motion_stitch, next_pause, close_frames)
     logger.info("ditto semantic pause closure: %d frames (%dms)",
                 close_frames, close_frames * 40)
 
@@ -336,7 +330,7 @@ def setup_kwargs_from_env():
     # the mouth so the output looks like raw source playback (reverted).
     setup_kwargs = dict(
         sampling_timesteps=int(os.environ.get("DITTO_STEPS", "5")),
-        max_size=int(os.environ.get("DITTO_MAX_SIZE", "896")),
+        max_size=int(os.environ.get("DITTO_MAX_SIZE", "1024")),
         emo=int(os.environ.get("DITTO_EMO", "4")),
         online_mode=os.environ.get("DITTO_ONLINE", "0") == "1",
     )

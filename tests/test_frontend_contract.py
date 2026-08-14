@@ -65,7 +65,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
     assert "DITTO_EXP=${DITTO_EXP:-0.7}" in script
-    assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-896}" in script
+    assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1024}" in script
     assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.2}" in script
     assert "DITTO_PAUSE_CLOSE_MS=${DITTO_PAUSE_CLOSE_MS:-120}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script

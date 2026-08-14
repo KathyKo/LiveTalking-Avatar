@@ -103,22 +103,22 @@ def test_semantic_pause_closes_only_lips_over_three_frames():
     from avatars.ditto_avatar import _LIP_KEYPOINTS, _SemanticPauseMotion
 
     class Stitch:
-        def __call__(self, _source, driving, **_kwargs):
-            return driving
+        def __call__(self, source, driving, **_kwargs):
+            return source, driving
 
     pauses = iter([True, True, True, False])
-    neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
-    wrapper = _SemanticPauseMotion(Stitch(), lambda: next(pauses), neutral, 3)
+    wrapper = _SemanticPauseMotion(Stitch(), lambda: next(pauses), 3)
 
-    source = {"exp": np.ones((1, 63), dtype=np.float32)}
-    outputs = [wrapper({}, source) for _ in range(4)]
-    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
+    source = np.zeros((1, 21, 3), dtype=np.float32)
+    driving = np.ones((1, 21, 3), dtype=np.float32)
+    outputs = [wrapper(source, driving)[1] for _ in range(4)]
+    lips = [out[:, list(_LIP_KEYPOINTS), :] for out in outputs]
 
     np.testing.assert_allclose(lips[0], 2.0 / 3.0)
     np.testing.assert_allclose(lips[1], 1.0 / 3.0)
     np.testing.assert_allclose(lips[2], 0.0)
     np.testing.assert_allclose(lips[3], 1.0)
-    np.testing.assert_allclose(outputs[2]["exp"].reshape(21, 3)[0], 1.0)
+    np.testing.assert_allclose(outputs[2][:, 0, :], 1.0)
 
 
 def test_semantic_pause_requires_a_full_40ms_silence_frame():
