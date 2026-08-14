@@ -50,7 +50,7 @@ def test_tail_batches_match_audio_duration():
     assert "ditto final audio received: flushing tail" in source
     neutralize = source.split("def _neutralize_source_lips", 1)[1].split("def _pump", 1)[0]
     assert "audio2motion.setup(" not in neutralize
-    assert 'DITTO_AV_OFFSET_MS", "300"' in source
+    assert 'DITTO_AV_OFFSET_MS", "260"' in source
     assert "self._audio_cap" not in source
     assert "self._audio_out.qsize() >=" not in source
     assert "ditto stop fence" not in source

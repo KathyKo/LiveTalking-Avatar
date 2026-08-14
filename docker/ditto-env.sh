@@ -42,7 +42,7 @@ export DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}
 export DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}
 export DITTO_HOLD=${DITTO_HOLD:-0.10}
 export DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}
-export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-300}
+export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-260}
 # Keep the final transition independent from the A/V calibration offset. Raising
 # this value freezes the final generated frame longer before the 160ms blend.
 export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}

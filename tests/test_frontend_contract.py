@@ -26,6 +26,10 @@ def test_avatar_frontend_contract():
     assert '<audio id="audio"' not in html
     assert "stream.addTrack(evt.track)" in html
     assert "aspect-ratio:4/3" in html
+    assert ".avatar-pane { flex: 1.8 1 0; max-width: none; min-width: 0; }" in html
+    assert ".chat-pane { flex: 1 1 0; min-width: 340px; }" in html
+    assert "max-height:calc(100vh - 170px)" in html
+    assert ".chat-bubble { max-width: 94%;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
@@ -57,7 +61,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-300}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-260}" in script
     assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}" in script
     assert "DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-0}" in script
     assert "DITTO_USE_GENERATED_IDLE=${DITTO_USE_GENERATED_IDLE:-0}" in script
