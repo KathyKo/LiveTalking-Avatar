@@ -134,6 +134,11 @@ class ElevenLabsTTS(BaseTTS):
         pause_ms = max(20, int(textevent.get("pause_ms", os.environ.get("DITTO_TAIL_MS", "500"))))
         for index in range((pause_ms + 19) // 20):
             eventpoint = dict(textevent)
+            # Ditto receives PCM, not punctuation. Mark these deliberately
+            # inserted zero-audio packets so its motion layer can close only
+            # the lips during a semantic pause without touching head motion or
+            # the final return-to-idle state machine.
+            eventpoint["semantic_pause"] = True
             if index * 20 + 20 >= pause_ms:
                 eventpoint.update(
                     status="end" if final else "segment_end",

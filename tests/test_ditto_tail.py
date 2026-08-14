@@ -99,6 +99,44 @@ def test_lip_response_sharpens_only_lip_motion():
     np.testing.assert_allclose(previous, 1.5)
 
 
+def test_semantic_pause_closes_only_lips_over_three_frames():
+    from avatars.ditto_avatar import _LIP_KEYPOINTS, _SemanticPauseMotion
+
+    class Stitch:
+        def __call__(self, _source, driving, **_kwargs):
+            return driving
+
+    pauses = iter([True, True, True, False])
+    neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
+    wrapper = _SemanticPauseMotion(Stitch(), lambda: next(pauses), neutral, 3)
+
+    source = {"exp": np.ones((1, 63), dtype=np.float32)}
+    outputs = [wrapper({}, source) for _ in range(4)]
+    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
+
+    np.testing.assert_allclose(lips[0], 2.0 / 3.0)
+    np.testing.assert_allclose(lips[1], 1.0 / 3.0)
+    np.testing.assert_allclose(lips[2], 0.0)
+    np.testing.assert_allclose(lips[3], 1.0)
+    np.testing.assert_allclose(outputs[2]["exp"].reshape(21, 3)[0], 1.0)
+
+
+def test_semantic_pause_requires_a_full_40ms_silence_frame():
+    from avatars.ditto_avatar import DittoReal
+
+    avatar = object.__new__(DittoReal)
+    avatar._pause_frames = Queue()
+    avatar._pause_packets = []
+
+    avatar._queue_pause_packet({})
+    avatar._queue_pause_packet({"semantic_pause": True})
+    assert avatar._next_pause_frame() is False
+
+    avatar._queue_pause_packet({"semantic_pause": True})
+    avatar._queue_pause_packet({"semantic_pause": True})
+    assert avatar._next_pause_frame() is True
+
+
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
     from avatars.ditto_avatar import DittoReal
 
@@ -215,6 +253,7 @@ def test_tts_silence_tail_marks_only_its_final_frame():
     assert "if index * 20 + 20 >= pause_ms:" in source
     assert 'status="end" if final else "segment_end"' in source
     assert "final=final" in source
+    assert 'eventpoint["semantic_pause"] = True' in source
 
 
 def _load_segment_gain():

@@ -43,6 +43,8 @@
 #     DITTO_LIP_RESPONSE  amplify frame-to-frame lip motion only (default 1.2).
 #                         1.0 disables; values above 1 make opening/closing react
 #                         faster without shifting audio/video timestamps.
+#     DITTO_PAUSE_CLOSE_MS  time used to blend lips closed during punctuation
+#                           silence (default 120ms; head and eyes are untouched).
 #     DITTO_SMO_K_S    smoothing of source (head/body) motion — NOT mouth-related
 #     DITTO_FADE_TYPE / DITTO_OVERLAP  online-chunk blending
 #
@@ -235,6 +237,53 @@ def install_lip_response(sdk, response):
     logger.info("ditto lip response: %.2fx", response)
 
 
+class _SemanticPauseMotion:
+    """Apply sentence-pause lip closure immediately before motion stitching."""
+
+    def __init__(self, motion_stitch, next_pause, neutral_lips, close_frames):
+        object.__setattr__(self, "_obj", motion_stitch)
+        object.__setattr__(self, "_next_pause", next_pause)
+        object.__setattr__(self, "_neutral_lips", np.asarray(neutral_lips).copy())
+        object.__setattr__(self, "_close_frames", max(1, int(close_frames)))
+        object.__setattr__(self, "_pause_run", 0)
+
+    def __call__(self, x_s_info, x_d_info, **kwargs):
+        paused = bool(self._next_pause())
+        if paused:
+            run = object.__getattribute__(self, "_pause_run") + 1
+            object.__setattr__(self, "_pause_run", run)
+            result = dict(x_d_info)
+            exp = np.array(x_d_info["exp"], copy=True)
+            lips = exp.reshape(-1, 3)
+            alpha = min(1.0, run / object.__getattribute__(self, "_close_frames"))
+            neutral = object.__getattribute__(self, "_neutral_lips")
+            lip_indices = list(_LIP_KEYPOINTS)
+            lips[lip_indices] = (1.0 - alpha) * lips[lip_indices] + alpha * neutral
+            result["exp"] = exp
+            x_d_info = result
+        else:
+            object.__setattr__(self, "_pause_run", 0)
+        return self._obj(x_s_info, x_d_info, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(object.__getattribute__(self, "_obj"), name)
+
+    def __setattr__(self, name, value):
+        setattr(object.__getattribute__(self, "_obj"), name, value)
+
+
+def install_semantic_pause_closure(sdk, next_pause, close_ms=120):
+    neutral_lips = getattr(sdk, "_livetalking_neutral_lips", None)
+    if neutral_lips is None:
+        logger.warning("ditto semantic pause closure disabled: neutral lips unavailable")
+        return
+    close_frames = max(1, int(round(float(close_ms) / 40.0)))
+    sdk.motion_stitch = _SemanticPauseMotion(
+        sdk.motion_stitch, next_pause, neutral_lips, close_frames)
+    logger.info("ditto semantic pause closure: %d frames (%dms)",
+                close_frames, close_frames * 40)
+
+
 def neutralize_sdk_source_lips(sdk, idle_path):
     """Apply the same closed-mouth source baseline used by the live server."""
     cap = cv2.VideoCapture(idle_path)
@@ -251,6 +300,8 @@ def neutralize_sdk_source_lips(sdk, idle_path):
         crop_flag_do_rot=sdk.crop_flag_do_rot,
     )
     neutral_exp = neutral["x_s_info"]["exp"]
+    sdk._livetalking_neutral_lips = np.asarray(neutral_exp).reshape(21, 3)[
+        list(_LIP_KEYPOINTS)].copy()
     count = _normalize_source_lips(sdk.source_info["x_s_info_lst"], neutral_exp)
     for name in ("s_kp_cond", "kp_cond"):
         setattr(sdk.audio2motion, name, _normalize_condition_lips(
@@ -423,6 +474,8 @@ class DittoReal(BaseAvatar):
         self._ditto_frames: "Queue" = Queue()  # (BGR frame, [(pcm, userdata) x2]) ready to play
         self._audio_out: "Queue" = Queue()      # (float32[320], userdata) awaiting its frame
         self._frame_keep: "Queue" = Queue()     # real audio frame=True, padded tail=False
+        self._pause_frames: "Queue" = Queue()   # semantic-pause flag per 40ms motion frame
+        self._pause_packets = []                 # pair 2 x 20ms TTS packets per frame
         self._prof = bool(os.environ.get("DITTO_PROF"))
         self._prof_t0 = self._prof_last = time.perf_counter()
         self._prof_audio_chunks = 0
@@ -519,6 +572,26 @@ class DittoReal(BaseAvatar):
         self.sdk.run_chunk(audio, chunksize)
         self._prof_log()
 
+    def _queue_pause_packet(self, datainfo):
+        self._pause_packets.append(bool(datainfo.get("semantic_pause")))
+        if len(self._pause_packets) == _AUDIO_CHUNKS_PER_FRAME:
+            self._pause_frames.put(all(self._pause_packets))
+            self._pause_packets.clear()
+
+    def _next_pause_frame(self):
+        try:
+            return self._pause_frames.get_nowait()
+        except queue.Empty:
+            return False
+
+    def _clear_pause_state(self):
+        pause_frames = getattr(self, "_pause_frames", None)
+        if pause_frames is not None:
+            _drain_queue(pause_frames)
+        pause_packets = getattr(self, "_pause_packets", None)
+        if pause_packets is not None:
+            pause_packets.clear()
+
     # TTS pushes 20ms float32 chunks here (override base, which routes to asr).
     def put_audio_frame(self, audio_chunk, datainfo: dict = {}):
         # After an interrupt we stay muted until the NEXT utterance begins, so the
@@ -558,6 +631,7 @@ class DittoReal(BaseAvatar):
         self._prof_audio_samples += len(a)
         # queued for the speaker, in the same order it drives the mouth
         self._audio_out.put((a, datainfo))
+        self._queue_pause_packet(datainfo)
         # accumulate and drive Ditto's mouth with a sliding 6480-sample window
         self._feat_buf = np.concatenate([self._feat_buf, a])
         while self._feat_pos + _SPLIT_LEN <= len(self._feat_buf):
@@ -570,6 +644,9 @@ class DittoReal(BaseAvatar):
         # end of an utterance: pad-and-flush the tail so all speech gets frames,
         # then reset — otherwise leftover audio drifts into the next utterance.
         if datainfo.get('status') == 'end':
+            if self._pause_packets:
+                self._pause_frames.put(all(self._pause_packets))
+                self._pause_packets.clear()
             logger.info("ditto final audio received: flushing tail")
             self._final_pending = True
             self._flush_tail()
@@ -624,6 +701,7 @@ class DittoReal(BaseAvatar):
         _drain_queue(self._audio_out)
         _drain_queue(self._ditto_frames)
         _drain_queue(self._frame_keep)
+        self._clear_pause_state()
         logger.info("ditto flush_talk: cleared buffered speech, swallowing %d in-flight frames",
                     max(0, pending))
 
@@ -936,6 +1014,10 @@ class DittoReal(BaseAvatar):
                 self.record_audio_data(pcm)
                 final_audio_played = final_audio_played or _is_final_audio_event(ud)
             if final_audio_played:
+                # The SDK may strand final silence and let the playback fallback
+                # drain it without producing motion. Never carry those pause
+                # masks into the next utterance.
+                self._clear_pause_state()
                 self._final_pending = False
                 final_idle_at = time.perf_counter() + _FINAL_STATIC_HOLD
                 logger.info(
@@ -944,6 +1026,7 @@ class DittoReal(BaseAvatar):
             elif (self._final_pending and not self._utt_active
                   and self._audio_out.empty() and self._ditto_frames.empty()
                   and not audio_delay and not video_delay):
+                self._clear_pause_state()
                 self._final_pending = False
                 final_idle_at = time.perf_counter() + _FINAL_STATIC_HOLD
                 logger.info(
@@ -981,6 +1064,9 @@ class DittoReal(BaseAvatar):
         self._neutralize_source_lips()
         install_lip_response(
             self.sdk, os.environ.get("DITTO_LIP_RESPONSE", "1.2"))
+        install_semantic_pause_closure(
+            self.sdk, self._next_pause_frame,
+            os.environ.get("DITTO_PAUSE_CLOSE_MS", "120"))
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:
