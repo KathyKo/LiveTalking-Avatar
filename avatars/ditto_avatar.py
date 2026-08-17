@@ -247,15 +247,28 @@ def install_lip_response(sdk, response):
 class _SemanticPauseMotion:
     """Drive Ditto's official VAD control from audio-aligned pause markers."""
 
-    def __init__(self, motion_stitch, next_pause, close_frames, open_frames=2):
+    def __init__(self, motion_stitch, next_pause, close_frames, open_frames=2,
+                 delay_frames=0):
         object.__setattr__(self, "_obj", motion_stitch)
         object.__setattr__(self, "_next_pause", next_pause)
         object.__setattr__(self, "_close_frames", max(1, int(close_frames)))
         object.__setattr__(self, "_open_frames", max(1, int(open_frames)))
+        object.__setattr__(self, "_delay_frames", max(0, int(delay_frames)))
+        object.__setattr__(self, "_delay", deque())
+        self.reset()
+
+    def reset(self):
+        delay = object.__getattribute__(self, "_delay")
+        delay.clear()
+        delay.extend([(False, 0.0)] * object.__getattribute__(self, "_delay_frames"))
         object.__setattr__(self, "_closure", 0.0)
 
     def __call__(self, x_s_info, x_d_info, **kwargs):
         marker = self._next_pause()
+        delay = object.__getattribute__(self, "_delay")
+        if object.__getattribute__(self, "_delay_frames"):
+            delay.append(marker)
+            marker = delay.popleft()
         if isinstance(marker, tuple):
             semantic_pause, close_strength = marker
         else:
@@ -282,16 +295,24 @@ class _SemanticPauseMotion:
         setattr(object.__getattribute__(self, "_obj"), name, value)
 
 
-def install_semantic_pause_closure(sdk, next_pause, close_ms=120):
+def install_semantic_pause_closure(sdk, next_pause, close_ms=120, offset_ms=0):
     neutral_lips = getattr(sdk, "_livetalking_neutral_lips", None)
     if neutral_lips is None:
         logger.warning("ditto semantic pause closure disabled: neutral lips unavailable")
-        return
+        return None
     close_frames = max(1, int(round(float(close_ms) / 40.0)))
-    sdk.motion_stitch = _SemanticPauseMotion(
-        sdk.motion_stitch, next_pause, close_frames)
-    logger.info("ditto semantic pause closure: %d frames (%dms)",
-                close_frames, close_frames * 40)
+    # Positive DITTO_AV_OFFSET_MS delays playback audio, while this control is
+    # applied when the video frame is generated. Delay the marker on the same
+    # 40ms motion clock so visible closure coincides with audible silence.
+    delay_frames = max(0, int(float(offset_ms) / 40.0))
+    wrapper = _SemanticPauseMotion(
+        sdk.motion_stitch, next_pause, close_frames,
+        delay_frames=delay_frames)
+    sdk.motion_stitch = wrapper
+    logger.info(
+        "ditto semantic pause closure: %d frames (%dms), playback aligned by %d frames (%dms)",
+        close_frames, close_frames * 40, delay_frames, delay_frames * 40)
+    return wrapper
 
 
 def neutralize_sdk_source_lips(sdk, idle_path):
@@ -486,6 +507,7 @@ class DittoReal(BaseAvatar):
         self._frame_keep: "Queue" = Queue()     # real audio frame=True, padded tail=False
         self._pause_frames: "Queue" = Queue()   # semantic-pause flag per 40ms motion frame
         self._pause_packets = []                 # pair 2 x 20ms TTS packets per frame
+        self._pause_motion = None
         self._vad_silent_frames = 0
         self._vad_rms = max(0.0, float(os.environ.get("DITTO_VAD_RMS", "0.006")))
         self._prof = bool(os.environ.get("DITTO_PROF"))
@@ -628,6 +650,9 @@ class DittoReal(BaseAvatar):
         pause_packets = getattr(self, "_pause_packets", None)
         if pause_packets is not None:
             pause_packets.clear()
+        pause_motion = getattr(self, "_pause_motion", None)
+        if pause_motion is not None:
+            pause_motion.reset()
         self._vad_silent_frames = 0
 
     # TTS pushes 20ms float32 chunks here (override base, which routes to asr).
@@ -1100,9 +1125,10 @@ class DittoReal(BaseAvatar):
         self._neutralize_source_lips()
         install_lip_response(
             self.sdk, os.environ.get("DITTO_LIP_RESPONSE", "1.2"))
-        install_semantic_pause_closure(
+        self._pause_motion = install_semantic_pause_closure(
             self.sdk, self._next_pause_frame,
-            os.environ.get("DITTO_PAUSE_CLOSE_MS", "120"))
+            os.environ.get("DITTO_PAUSE_CLOSE_MS", "120"),
+            os.environ.get("DITTO_AV_OFFSET_MS", "260"))
         # Hijack Ditto's file writer → frames flow to WebRTC (no queue race).
         self.sdk.writer = _FrameSink(self._on_frame)
         if self._dbg:

@@ -181,6 +181,107 @@ def test_audio_vad_requires_80ms_silence_and_semantic_pause_is_immediate():
     assert avatar._next_pause_frame() == (False, 0.5)
 
 
+def test_pause_control_follows_positive_audio_offset_without_touching_motion_order():
+    from avatars.ditto_avatar import _SemanticPauseMotion
+
+    class Stitch:
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, _source, driving, **kwargs):
+            self.calls.append(kwargs)
+            return driving
+
+    # 260ms audio delay is represented by six 40ms motion frames. The close
+    # marker must therefore wait six frames instead of preceding audible silence.
+    markers = iter([(True, 0.0)] + [(False, 0.0)] * 7)
+    stitch = Stitch()
+    wrapper = _SemanticPauseMotion(
+        stitch, lambda: next(markers), close_frames=1, open_frames=1,
+        delay_frames=6,
+    )
+    source = {"exp": np.ones((1, 63), dtype=np.float32)}
+
+    for _ in range(8):
+        wrapper({}, source)
+
+    np.testing.assert_allclose(
+        [call.get("vad_alpha", 1.0) for call in stitch.calls],
+        [1.0] * 6 + [0.0, 1.0],
+    )
+
+
+def test_pause_control_reset_discards_delayed_marker_and_reopens_lips():
+    from avatars.ditto_avatar import _SemanticPauseMotion
+
+    class Stitch:
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, _source, driving, **kwargs):
+            self.calls.append(kwargs)
+            return driving
+
+    markers = iter([(True, 0.0)] + [(False, 0.0)] * 5)
+    stitch = Stitch()
+    wrapper = _SemanticPauseMotion(
+        stitch, lambda: next(markers), close_frames=1, open_frames=1,
+        delay_frames=2,
+    )
+    source = {"exp": np.ones((1, 63), dtype=np.float32)}
+
+    wrapper({}, source)  # close marker is waiting inside the delay buffer
+    wrapper.reset()
+    for _ in range(3):
+        wrapper({}, source)
+
+    assert all(call.get("vad_alpha", 1.0) == 1.0 for call in stitch.calls)
+
+
+def test_pause_control_install_uses_positive_playback_offset():
+    from avatars.ditto_avatar import install_semantic_pause_closure
+
+    class Stitch:
+        def __call__(self, _source, driving, **_kwargs):
+            return driving
+
+    class Sdk:
+        _livetalking_neutral_lips = np.zeros((6, 3), dtype=np.float32)
+        motion_stitch = Stitch()
+
+    sdk = Sdk()
+    wrapper = install_semantic_pause_closure(
+        sdk, lambda: (False, 0.0), close_ms=120, offset_ms=260)
+
+    assert sdk.motion_stitch is wrapper
+    assert object.__getattribute__(wrapper, "_delay_frames") == 6
+
+
+def test_clear_pause_state_resets_delayed_control():
+    from avatars.ditto_avatar import DittoReal
+
+    class PauseMotion:
+        def __init__(self):
+            self.resets = 0
+
+        def reset(self):
+            self.resets += 1
+
+    avatar = object.__new__(DittoReal)
+    avatar._pause_frames = Queue()
+    avatar._pause_frames.put((True, 0.0))
+    avatar._pause_packets = [(True, 0.0, 0.0)]
+    avatar._vad_silent_frames = 2
+    avatar._pause_motion = PauseMotion()
+
+    avatar._clear_pause_state()
+
+    assert avatar._pause_frames.empty()
+    assert avatar._pause_packets == []
+    assert avatar._vad_silent_frames == 0
+    assert avatar._pause_motion.resets == 1
+
+
 def test_pump_drains_stranded_final_audio_and_returns_idle(monkeypatch):
     from avatars.ditto_avatar import DittoReal
 
