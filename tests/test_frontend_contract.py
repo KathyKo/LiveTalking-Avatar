@@ -21,6 +21,9 @@ def test_avatar_frontend_contract():
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
     assert "const CHAT_AGENT_ID = 'JTC_M';" in html
+    assert "const INITIAL_AVATAR_ID = 'ditto_woman';" in html
+    assert "avatars.includes(INITIAL_AVATAR_ID)" in html
+    assert "id === preferred" in html
     assert "agent_id: CHAT_AGENT_ID" in html
     assert "fetch('/avatar_timing'" in html
     assert '<audio id="audio"' not in html

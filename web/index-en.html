@@ -471,6 +471,7 @@ async function start() {
 // --- Text / Chat ---
 const CHAT_API_URL = 'https://voncierge-lang-agent.hipster-virtual.com/chat/sse';
 const CHAT_AGENT_ID = 'JTC_M';
+const INITIAL_AVATAR_ID = 'ditto_woman';
 
 function unlockOutputAudio() {
     const video = document.getElementById('video');
@@ -837,12 +838,15 @@ async function loadAvatarList() {
             const c = await fetch('/api/admin/config').then(r => r.json());
             def = (c.data && c.data.config && c.data.config.avatar_id) || '';
         } catch (e) { /* config endpoint optional */ }
+        const preferred = avatars.includes(INITIAL_AVATAR_ID)
+            ? INITIAL_AVATAR_ID
+            : (avatars.includes(def) ? def : (avatars[0] || ''));
         sel.innerHTML = '';
         avatars.forEach(id => {
             const o = document.createElement('option');
             o.value = id;
-            o.textContent = id + (id === def ? ' (default)' : '');
-            if (id === def) o.selected = true;
+            o.textContent = id + (id === preferred ? ' (default)' : '');
+            if (id === preferred) o.selected = true;
             sel.appendChild(o);
         });
     } catch (e) { console.warn('avatar list failed', e); }
