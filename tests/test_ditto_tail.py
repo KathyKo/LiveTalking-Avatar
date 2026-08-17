@@ -104,23 +104,21 @@ def test_semantic_pause_closes_only_lips_over_three_frames():
 
     class Stitch:
         def __call__(self, _source, driving, **_kwargs):
-            source = np.full((1, 21, 3), 2.0, dtype=np.float32)
-            generated = np.full((1, 21, 3), 10.0, dtype=np.float32)
-            return source, generated
+            return driving
 
     pauses = iter([True, True, True, False])
     neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
     wrapper = _SemanticPauseMotion(Stitch(), lambda: next(pauses), neutral, 3)
 
-    driving = {"exp": np.ones((1, 63), dtype=np.float32)}
-    outputs = [wrapper({}, driving) for _ in range(4)]
-    lips = [out[1][0, list(_LIP_KEYPOINTS)] for out in outputs]
+    source = {"exp": np.ones((1, 63), dtype=np.float32)}
+    outputs = [wrapper({}, source) for _ in range(4)]
+    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
 
-    np.testing.assert_allclose(lips[0], 10.0 - 8.0 / 3.0)
-    np.testing.assert_allclose(lips[1], 10.0 - 16.0 / 3.0)
-    np.testing.assert_allclose(lips[2], 2.0)
-    np.testing.assert_allclose(lips[3], 10.0)
-    np.testing.assert_allclose(outputs[2][1][0, 0], 10.0)
+    np.testing.assert_allclose(lips[0], 2.0 / 3.0)
+    np.testing.assert_allclose(lips[1], 1.0 / 3.0)
+    np.testing.assert_allclose(lips[2], 0.0)
+    np.testing.assert_allclose(lips[3], 1.0)
+    np.testing.assert_allclose(outputs[2]["exp"].reshape(21, 3)[0], 1.0)
 
 
 def test_terminal_phoneme_closure_can_be_partial_or_complete():
@@ -128,21 +126,19 @@ def test_terminal_phoneme_closure_can_be_partial_or_complete():
 
     class Stitch:
         def __call__(self, _source, driving, **_kwargs):
-            source = np.full((1, 21, 3), 2.0, dtype=np.float32)
-            generated = np.full((1, 21, 3), 10.0, dtype=np.float32)
-            return source, generated
+            return driving
 
     markers = iter([(False, 0.45), (False, 1.0), (False, 0.0)])
     neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
     wrapper = _SemanticPauseMotion(Stitch(), lambda: next(markers), neutral, 3)
-    driving = {"exp": np.ones((1, 63), dtype=np.float32)}
+    source = {"exp": np.ones((1, 63), dtype=np.float32)}
 
-    outputs = [wrapper({}, driving) for _ in range(3)]
-    lips = [out[1][0, list(_LIP_KEYPOINTS)] for out in outputs]
+    outputs = [wrapper({}, source) for _ in range(3)]
+    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
 
-    np.testing.assert_allclose(lips[0], 6.4)
-    np.testing.assert_allclose(lips[1], 2.0)
-    np.testing.assert_allclose(lips[2], 10.0)
+    np.testing.assert_allclose(lips[0], 0.55)
+    np.testing.assert_allclose(lips[1], 0.0)
+    np.testing.assert_allclose(lips[2], 1.0)
 
 
 def test_semantic_pause_requires_a_full_40ms_silence_frame():

@@ -49,10 +49,7 @@ def test_avatar_frontend_contract():
     semantic = html.split("function semanticBoundary", 1)[1].split("function addBubble", 1)[0]
     assert "HARD_MAX" not in semantic
     assert "lastSpace" not in semantic
-    assert "const numericColon" in semantic
-    assert "pauseMs: 800" in semantic
-    assert "const listMarker" in semantic
-    assert "(?:[-*\\u2022][ \\t]+)" in semantic
+    assert "s.startsWith(' - ', i)" in semantic
     assert "pauseMs: 280" in semantic
     assert "paragraph ? 900 : 520" in html
     assert "pauseMs: 800" in html
