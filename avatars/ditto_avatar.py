@@ -45,6 +45,8 @@
 #                         faster without shifting audio/video timestamps.
 #     DITTO_PAUSE_CLOSE_MS  time used to blend lips closed during punctuation
 #                           silence (default 120ms; head and eyes are untouched).
+#     DITTO_VAD_RMS     actual-audio silence threshold (default 0.006). Two
+#                       consecutive 40ms quiet frames close the mouth.
 #     DITTO_SMO_K_S    smoothing of source (head/body) motion — NOT mouth-related
 #     DITTO_FADE_TYPE / DITTO_OVERLAP  online-chunk blending
 #
@@ -243,14 +245,14 @@ def install_lip_response(sdk, response):
 
 
 class _SemanticPauseMotion:
-    """Apply phoneme/pause lip closure immediately before motion stitching."""
+    """Drive Ditto's official VAD control from audio-aligned pause markers."""
 
-    def __init__(self, motion_stitch, next_pause, neutral_lips, close_frames):
+    def __init__(self, motion_stitch, next_pause, close_frames, open_frames=2):
         object.__setattr__(self, "_obj", motion_stitch)
         object.__setattr__(self, "_next_pause", next_pause)
-        object.__setattr__(self, "_neutral_lips", np.asarray(neutral_lips).copy())
         object.__setattr__(self, "_close_frames", max(1, int(close_frames)))
-        object.__setattr__(self, "_pause_run", 0)
+        object.__setattr__(self, "_open_frames", max(1, int(open_frames)))
+        object.__setattr__(self, "_closure", 0.0)
 
     def __call__(self, x_s_info, x_d_info, **kwargs):
         marker = self._next_pause()
@@ -260,25 +262,17 @@ class _SemanticPauseMotion:
             semantic_pause = bool(marker)
             close_strength = 1.0 if semantic_pause else 0.0
         close_strength = max(0.0, min(float(close_strength), 1.0))
-        if semantic_pause:
-            run = object.__getattribute__(self, "_pause_run") + 1
-            object.__setattr__(self, "_pause_run", run)
-            alpha = min(1.0, run / object.__getattribute__(self, "_close_frames"))
-        elif close_strength:
-            object.__setattr__(self, "_pause_run", 0)
-            alpha = close_strength
-        else:
-            object.__setattr__(self, "_pause_run", 0)
-            alpha = 0.0
-        if alpha:
-            result = dict(x_d_info)
-            exp = np.array(x_d_info["exp"], copy=True)
-            lips = exp.reshape(-1, 3)
-            neutral = object.__getattribute__(self, "_neutral_lips")
-            lip_indices = list(_LIP_KEYPOINTS)
-            lips[lip_indices] = (1.0 - alpha) * lips[lip_indices] + alpha * neutral
-            result["exp"] = exp
-            x_d_info = result
+        target = 1.0 if semantic_pause else close_strength
+        closure = object.__getattribute__(self, "_closure")
+        frames = (object.__getattribute__(self, "_close_frames")
+                  if target > closure else object.__getattribute__(self, "_open_frames"))
+        step = 1.0 / frames
+        closure += max(-step, min(step, target - closure))
+        object.__setattr__(self, "_closure", closure)
+        if closure:
+            kwargs = dict(kwargs)
+            kwargs["vad_alpha"] = min(float(kwargs.get("vad_alpha", 1.0)),
+                                      1.0 - closure)
         return self._obj(x_s_info, x_d_info, **kwargs)
 
     def __getattr__(self, name):
@@ -295,7 +289,7 @@ def install_semantic_pause_closure(sdk, next_pause, close_ms=120):
         return
     close_frames = max(1, int(round(float(close_ms) / 40.0)))
     sdk.motion_stitch = _SemanticPauseMotion(
-        sdk.motion_stitch, next_pause, neutral_lips, close_frames)
+        sdk.motion_stitch, next_pause, close_frames)
     logger.info("ditto semantic pause closure: %d frames (%dms)",
                 close_frames, close_frames * 40)
 
@@ -492,6 +486,8 @@ class DittoReal(BaseAvatar):
         self._frame_keep: "Queue" = Queue()     # real audio frame=True, padded tail=False
         self._pause_frames: "Queue" = Queue()   # semantic-pause flag per 40ms motion frame
         self._pause_packets = []                 # pair 2 x 20ms TTS packets per frame
+        self._vad_silent_frames = 0
+        self._vad_rms = max(0.0, float(os.environ.get("DITTO_VAD_RMS", "0.006")))
         self._prof = bool(os.environ.get("DITTO_PROF"))
         self._prof_t0 = self._prof_last = time.perf_counter()
         self._prof_audio_chunks = 0
@@ -589,17 +585,35 @@ class DittoReal(BaseAvatar):
         self.sdk.run_chunk(audio, chunksize)
         self._prof_log()
 
-    def _queue_pause_packet(self, datainfo):
+    def _flush_pause_packets(self):
+        if not self._pause_packets:
+            return
+        semantic = all(packet[0] for packet in self._pause_packets)
+        strength = sum(packet[1] for packet in self._pause_packets) / len(
+            self._pause_packets)
+        rms = max(packet[2] for packet in self._pause_packets)
+        if semantic:
+            self._vad_silent_frames = 2
+        elif rms <= self._vad_rms:
+            self._vad_silent_frames += 1
+        else:
+            self._vad_silent_frames = 0
+        self._pause_frames.put((
+            semantic or self._vad_silent_frames >= 2,
+            strength,
+        ))
+        self._pause_packets.clear()
+
+    def _queue_pause_packet(self, audio, datainfo):
+        audio = np.asarray(audio, dtype=np.float32)
+        rms = float(np.sqrt(np.mean(audio * audio))) if audio.size else 0.0
         self._pause_packets.append((
             bool(datainfo.get("semantic_pause")),
             max(0.0, min(float(datainfo.get("lip_close_strength", 0.0)), 1.0)),
+            rms,
         ))
         if len(self._pause_packets) == _AUDIO_CHUNKS_PER_FRAME:
-            semantic = all(packet[0] for packet in self._pause_packets)
-            strength = sum(packet[1] for packet in self._pause_packets) / len(
-                self._pause_packets)
-            self._pause_frames.put((semantic, strength))
-            self._pause_packets.clear()
+            self._flush_pause_packets()
 
     def _next_pause_frame(self):
         try:
@@ -614,6 +628,7 @@ class DittoReal(BaseAvatar):
         pause_packets = getattr(self, "_pause_packets", None)
         if pause_packets is not None:
             pause_packets.clear()
+        self._vad_silent_frames = 0
 
     # TTS pushes 20ms float32 chunks here (override base, which routes to asr).
     def put_audio_frame(self, audio_chunk, datainfo: dict = {}):
@@ -654,7 +669,7 @@ class DittoReal(BaseAvatar):
         self._prof_audio_samples += len(a)
         # queued for the speaker, in the same order it drives the mouth
         self._audio_out.put((a, datainfo))
-        self._queue_pause_packet(datainfo)
+        self._queue_pause_packet(a, datainfo)
         # accumulate and drive Ditto's mouth with a sliding 6480-sample window
         self._feat_buf = np.concatenate([self._feat_buf, a])
         while self._feat_pos + _SPLIT_LEN <= len(self._feat_buf):
@@ -667,12 +682,7 @@ class DittoReal(BaseAvatar):
         # end of an utterance: pad-and-flush the tail so all speech gets frames,
         # then reset — otherwise leftover audio drifts into the next utterance.
         if datainfo.get('status') == 'end':
-            if self._pause_packets:
-                semantic = all(packet[0] for packet in self._pause_packets)
-                strength = sum(packet[1] for packet in self._pause_packets) / len(
-                    self._pause_packets)
-                self._pause_frames.put((semantic, strength))
-                self._pause_packets.clear()
+            self._flush_pause_packets()
             logger.info("ditto final audio received: flushing tail")
             self._final_pending = True
             self._flush_tail()

@@ -99,65 +99,85 @@ def test_lip_response_sharpens_only_lip_motion():
     np.testing.assert_allclose(previous, 1.5)
 
 
-def test_semantic_pause_closes_only_lips_over_three_frames():
-    from avatars.ditto_avatar import _LIP_KEYPOINTS, _SemanticPauseMotion
+def test_semantic_pause_uses_official_vad_control_over_three_frames():
+    from avatars.ditto_avatar import _SemanticPauseMotion
 
     class Stitch:
-        def __call__(self, _source, driving, **_kwargs):
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, _source, driving, **kwargs):
+            self.calls.append(kwargs)
             return driving
 
     pauses = iter([True, True, True, False])
-    neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
-    wrapper = _SemanticPauseMotion(Stitch(), lambda: next(pauses), neutral, 3)
+    stitch = Stitch()
+    wrapper = _SemanticPauseMotion(stitch, lambda: next(pauses), 3)
 
     source = {"exp": np.ones((1, 63), dtype=np.float32)}
-    outputs = [wrapper({}, source) for _ in range(4)]
-    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
+    for _ in range(4):
+        wrapper({}, source)
 
-    np.testing.assert_allclose(lips[0], 2.0 / 3.0)
-    np.testing.assert_allclose(lips[1], 1.0 / 3.0)
-    np.testing.assert_allclose(lips[2], 0.0)
-    np.testing.assert_allclose(lips[3], 1.0)
-    np.testing.assert_allclose(outputs[2]["exp"].reshape(21, 3)[0], 1.0)
+    np.testing.assert_allclose(
+        [call["vad_alpha"] for call in stitch.calls],
+        [2.0 / 3.0, 1.0 / 3.0, 0.0, 0.5],
+    )
 
 
 def test_terminal_phoneme_closure_can_be_partial_or_complete():
-    from avatars.ditto_avatar import _LIP_KEYPOINTS, _SemanticPauseMotion
+    from avatars.ditto_avatar import _SemanticPauseMotion
 
     class Stitch:
-        def __call__(self, _source, driving, **_kwargs):
+        def __init__(self):
+            self.calls = []
+
+        def __call__(self, _source, driving, **kwargs):
+            self.calls.append(kwargs)
             return driving
 
     markers = iter([(False, 0.45), (False, 1.0), (False, 0.0)])
-    neutral = np.zeros((len(_LIP_KEYPOINTS), 3), dtype=np.float32)
-    wrapper = _SemanticPauseMotion(Stitch(), lambda: next(markers), neutral, 3)
+    stitch = Stitch()
+    wrapper = _SemanticPauseMotion(stitch, lambda: next(markers), 1)
     source = {"exp": np.ones((1, 63), dtype=np.float32)}
 
-    outputs = [wrapper({}, source) for _ in range(3)]
-    lips = [out["exp"].reshape(21, 3)[list(_LIP_KEYPOINTS)] for out in outputs]
+    for _ in range(3):
+        wrapper({}, source)
 
-    np.testing.assert_allclose(lips[0], 0.55)
-    np.testing.assert_allclose(lips[1], 0.0)
-    np.testing.assert_allclose(lips[2], 1.0)
+    np.testing.assert_allclose(
+        [call["vad_alpha"] for call in stitch.calls],
+        [0.55, 0.0, 0.5],
+    )
 
 
-def test_semantic_pause_requires_a_full_40ms_silence_frame():
+def test_audio_vad_requires_80ms_silence_and_semantic_pause_is_immediate():
     from avatars.ditto_avatar import DittoReal
 
     avatar = object.__new__(DittoReal)
     avatar._pause_frames = Queue()
     avatar._pause_packets = []
+    avatar._vad_silent_frames = 0
+    avatar._vad_rms = 0.006
+    silence = np.zeros(320, dtype=np.float32)
+    speech = np.full(320, 0.02, dtype=np.float32)
 
-    avatar._queue_pause_packet({})
-    avatar._queue_pause_packet({"semantic_pause": True})
+    avatar._queue_pause_packet(silence, {})
+    avatar._queue_pause_packet(speech, {})
     assert avatar._next_pause_frame() == (False, 0.0)
 
-    avatar._queue_pause_packet({"semantic_pause": True})
-    avatar._queue_pause_packet({"semantic_pause": True})
+    avatar._queue_pause_packet(silence, {})
+    avatar._queue_pause_packet(silence, {})
+    assert avatar._next_pause_frame() == (False, 0.0)
+
+    avatar._queue_pause_packet(silence, {})
+    avatar._queue_pause_packet(silence, {})
     assert avatar._next_pause_frame() == (True, 0.0)
 
-    avatar._queue_pause_packet({"lip_close_strength": 0.25})
-    avatar._queue_pause_packet({"lip_close_strength": 0.75})
+    avatar._queue_pause_packet(speech, {"semantic_pause": True})
+    avatar._queue_pause_packet(speech, {"semantic_pause": True})
+    assert avatar._next_pause_frame() == (True, 0.0)
+
+    avatar._queue_pause_packet(speech, {"lip_close_strength": 0.25})
+    avatar._queue_pause_packet(speech, {"lip_close_strength": 0.75})
     assert avatar._next_pause_frame() == (False, 0.5)
 
 
