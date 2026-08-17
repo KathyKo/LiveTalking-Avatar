@@ -68,6 +68,7 @@ from threading import Thread, Event
 
 from avatars.base_avatar import BaseAvatar
 from registry import register
+from utils.gpu_init import GPU_INIT_LOCK
 from utils.logger import logger
 
 _DITTO_REPO = os.environ.get("DITTO_REPO", "/workspace/ditto-talkinghead")
@@ -494,7 +495,10 @@ class DittoReal(BaseAvatar):
         self._t_build = time.perf_counter()   # [timing] session build start (= right after /offer)
         from stream_pipeline_online import StreamSDK
         _t = time.perf_counter()
-        self.sdk = StreamSDK(self.cfg["cfg_pkl"], self.cfg["data_root"])
+        logger.info("[ditto-timing] waiting for GPU model-init lock")
+        with GPU_INIT_LOCK:
+            logger.info("[ditto-timing] loading StreamSDK engines")
+            self.sdk = StreamSDK(self.cfg["cfg_pkl"], self.cfg["data_root"])
         logger.info("[ditto-timing] StreamSDK engine load: %.2fs", time.perf_counter() - _t)
 
         # Sliding-window buffer for hubert (see constants above). Starts with the

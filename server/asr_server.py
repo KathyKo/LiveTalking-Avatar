@@ -21,6 +21,7 @@ import numpy as np
 from aiohttp import web
 
 from utils.logger import logger
+from utils.gpu_init import GPU_INIT_LOCK
 
 
 # ─── Lazy Model Loader ────────────────────────────────────────────────────
@@ -38,31 +39,36 @@ _asr_model = None       # funasr AutoModel, or ElevenLabs client in elevenlabs m
 def _load_asr_model():
     """
     Load the ASR model on first call (lazy singleton).
-    Thread-safe via the GIL — only one thread will enter the init block.
+    Thread-safe via GPU_INIT_LOCK; PyTorch and TensorRT initialization share it.
     """
     global _asr_model
     if _asr_model is not None:
         return _asr_model
 
-    import torch
-    from funasr import AutoModel
+    with GPU_INIT_LOCK:
+        # Recheck after waiting: another thread may have completed the load.
+        if _asr_model is not None:
+            return _asr_model
 
-    device = os.environ.get("ASR_DEVICE") or ("cuda:0" if torch.cuda.is_available() else "cpu")
-    logger.info(
-        f"[ASR] Loading {_ASR_MODEL_ID} on device='{device}' "
-        f"(first run downloads the model from ModelScope)..."
-    )
+        import torch
+        from funasr import AutoModel
 
-    t0 = time.perf_counter()
-    _asr_model = AutoModel(
-        model=_ASR_MODEL_ID,
-        vad_model="fsmn-vad",
-        vad_kwargs={"max_single_segment_time": 30000},
-        device=device,
-        trust_remote_code=True,
-    )
-    elapsed = time.perf_counter() - t0
-    logger.info(f"[ASR] ✅ {_ASR_MODEL_ID} ready — loaded in {elapsed:.1f}s on {device}")
+        device = os.environ.get("ASR_DEVICE") or ("cuda:0" if torch.cuda.is_available() else "cpu")
+        logger.info(
+            f"[ASR] Loading {_ASR_MODEL_ID} on device='{device}' "
+            f"(first run downloads the model from ModelScope)..."
+        )
+
+        t0 = time.perf_counter()
+        _asr_model = AutoModel(
+            model=_ASR_MODEL_ID,
+            vad_model="fsmn-vad",
+            vad_kwargs={"max_single_segment_time": 30000},
+            device=device,
+            trust_remote_code=True,
+        )
+        elapsed = time.perf_counter() - t0
+        logger.info(f"[ASR] ✅ {_ASR_MODEL_ID} ready — loaded in {elapsed:.1f}s on {device}")
     return _asr_model
 
 
@@ -277,8 +283,10 @@ def warmup_async():
         try:
             if _IS_ELEVENLABS:
                 return  # cloud API — nothing to preload, and a dummy call costs credits
-            _load_asr_model()
-            _run_inference(np.zeros(SAMPLE_RATE, dtype=np.float32), SAMPLE_RATE, False)
+            # Include the first CUDA inference in the critical section too.
+            with GPU_INIT_LOCK:
+                _load_asr_model()
+                _run_inference(np.zeros(SAMPLE_RATE, dtype=np.float32), SAMPLE_RATE, False)
             logger.info("[ASR] 🔥 Warmup complete — first request will be fast")
         except Exception:
             logger.exception("[ASR] Warmup failed (will retry lazily on first request)")
