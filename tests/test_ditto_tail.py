@@ -250,7 +250,22 @@ def test_alignment_flush_lands_on_sdk_batch_boundary():
     assert "keep_frames=0)" in source
 
 
-def test_flush_does_not_double_reserve_warmup_frames():
+def test_priming_fills_the_complete_non_rendered_d0_batch():
+    from avatars.ditto_avatar import _priming_chunk_count
+
+    assert _priming_chunk_count(10, 5) == 2
+    assert _priming_chunk_count(5, 5) == 1
+    assert _priming_chunk_count(12, 5) == 3
+
+    source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
+        encoding="utf-8"
+    )
+    assert "for _ in range(priming_chunks):" in source
+    assert "count_expected=False" in source
+    assert "self._drop_ditto_frames += _CHUNKSIZE[1]" not in source
+
+
+def test_flush_reserves_only_unaccounted_inflight_frames():
     source = (Path(__file__).parents[1] / "avatars" / "ditto_avatar.py").read_text(
         encoding="utf-8"
     )
@@ -263,7 +278,7 @@ def test_flush_does_not_double_reserve_warmup_frames():
     exec(compile(ast.Module(body=[function], type_ignores=[]), "<drop>", "exec"), namespace)
     reserve = namespace["_reserve_drop_frames"]
 
-    assert reserve(5, 5) == 5   # warm-up was already reserved
+    assert reserve(5, 5) == 5
     assert reserve(5, 20) == 20
     assert reserve(0, 20) == 20
 

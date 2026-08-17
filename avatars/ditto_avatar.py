@@ -122,6 +122,11 @@ def _alignment_flush_chunks(run_chunks, valid_clip_len, frames_per_chunk=5):
     return 0 if pending == 0 else (valid_clip_len - pending + frames_per_chunk - 1) // frames_per_chunk
 
 
+def _priming_chunk_count(valid_clip_len, frames_per_chunk=5):
+    """Chunks of silence needed to establish online Ditto's non-rendered d0."""
+    return max(1, (int(valid_clip_len) + frames_per_chunk - 1) // frames_per_chunk)
+
+
 def _reserve_drop_frames(already_reserved, pending):
     """Reserve each in-flight frame once, including the JIT warm-up batch."""
     return max(already_reserved, pending)
@@ -572,9 +577,10 @@ class DittoReal(BaseAvatar):
             self._ditto_frames.qsize(), self._audio_out.qsize(),
             self._sdk_queue_sizes())
 
-    def _run_chunk(self, audio, chunksize, keep_frames=None):
+    def _run_chunk(self, audio, chunksize, keep_frames=None, count_expected=True):
         self._prof_run_chunks += 1
-        self._prof_expected_frames += chunksize[1]
+        if count_expected:
+            self._prof_expected_frames += chunksize[1]
         if self._utt_active:
             self._utt_frames_scheduled += chunksize[1]
             keep_frames = chunksize[1] if keep_frames is None else keep_frames
@@ -1099,11 +1105,17 @@ class DittoReal(BaseAvatar):
         # Idle frames = the full source frames Ditto composites onto (RGB→BGR).
         self._idle_bgr = self._load_idle_bgr()
 
-        # Trigger PyTorch JIT compilation now (while idle) so the first real
-        # utterance doesn't hit the cold-start penalty (~2fps for first 5-10s).
-        self._drop_ditto_frames += _CHUNKSIZE[1]
-        self._run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE)
-        logger.info("ditto JIT warm-up chunk queued")
+        # Online Ditto's first valid_clip_len frames establish d0 and produce no
+        # output (stream_pipeline_online.py:432-440). Prime the complete batch
+        # with silence; otherwise the first real speech frames are swallowed by
+        # d0 and every audio/pause marker is shifted away from its mouth frame.
+        valid_clip_len = getattr(self.sdk.audio2motion, "valid_clip_len", 10)
+        priming_chunks = _priming_chunk_count(valid_clip_len, _CHUNKSIZE[1])
+        for _ in range(priming_chunks):
+            self._run_chunk(np.zeros(_SPLIT_LEN, dtype=np.float32), _CHUNKSIZE,
+                            count_expected=False)
+        logger.info("ditto JIT/d0 warm-up queued: %d chunks (%d frames)",
+                    priming_chunks, priming_chunks * _CHUNKSIZE[1])
 
         self.tts.render(quit_event)          # TTS → put_audio_frame → run_chunk
         self.output.start()
