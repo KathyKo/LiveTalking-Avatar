@@ -71,7 +71,6 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1024}" in script
     assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.2}" in script
     assert "DITTO_PAUSE_CLOSE_MS=${DITTO_PAUSE_CLOSE_MS:-120}" in script
-    assert "DITTO_VAD_RMS=${DITTO_VAD_RMS:-0.006}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script

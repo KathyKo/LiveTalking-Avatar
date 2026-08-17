@@ -45,8 +45,6 @@
 #                         faster without shifting audio/video timestamps.
 #     DITTO_PAUSE_CLOSE_MS  time used to blend lips closed during punctuation
 #                           silence (default 120ms; head and eyes are untouched).
-#     DITTO_VAD_RMS     actual-audio silence threshold (default 0.006). Two
-#                       consecutive 40ms quiet frames close the mouth.
 #     DITTO_SMO_K_S    smoothing of source (head/body) motion — NOT mouth-related
 #     DITTO_FADE_TYPE / DITTO_OVERLAP  online-chunk blending
 #
@@ -68,7 +66,6 @@ from threading import Thread, Event
 
 from avatars.base_avatar import BaseAvatar
 from registry import register
-from utils.gpu_init import GPU_INIT_LOCK
 from utils.logger import logger
 
 _DITTO_REPO = os.environ.get("DITTO_REPO", "/workspace/ditto-talkinghead")
@@ -246,14 +243,14 @@ def install_lip_response(sdk, response):
 
 
 class _SemanticPauseMotion:
-    """Drive Ditto's official VAD control from audio-aligned pause markers."""
+    """Apply phoneme/pause lip closure immediately before motion stitching."""
 
-    def __init__(self, motion_stitch, next_pause, close_frames, open_frames=2,
+    def __init__(self, motion_stitch, next_pause, neutral_lips, close_frames,
                  delay_frames=0):
         object.__setattr__(self, "_obj", motion_stitch)
         object.__setattr__(self, "_next_pause", next_pause)
+        object.__setattr__(self, "_neutral_lips", np.asarray(neutral_lips).copy())
         object.__setattr__(self, "_close_frames", max(1, int(close_frames)))
-        object.__setattr__(self, "_open_frames", max(1, int(open_frames)))
         object.__setattr__(self, "_delay_frames", max(0, int(delay_frames)))
         object.__setattr__(self, "_delay", deque())
         self.reset()
@@ -262,7 +259,7 @@ class _SemanticPauseMotion:
         delay = object.__getattribute__(self, "_delay")
         delay.clear()
         delay.extend([(False, 0.0)] * object.__getattribute__(self, "_delay_frames"))
-        object.__setattr__(self, "_closure", 0.0)
+        object.__setattr__(self, "_pause_run", 0)
 
     def __call__(self, x_s_info, x_d_info, **kwargs):
         marker = self._next_pause()
@@ -276,17 +273,25 @@ class _SemanticPauseMotion:
             semantic_pause = bool(marker)
             close_strength = 1.0 if semantic_pause else 0.0
         close_strength = max(0.0, min(float(close_strength), 1.0))
-        target = 1.0 if semantic_pause else close_strength
-        closure = object.__getattribute__(self, "_closure")
-        frames = (object.__getattribute__(self, "_close_frames")
-                  if target > closure else object.__getattribute__(self, "_open_frames"))
-        step = 1.0 / frames
-        closure += max(-step, min(step, target - closure))
-        object.__setattr__(self, "_closure", closure)
-        if closure:
-            kwargs = dict(kwargs)
-            kwargs["vad_alpha"] = min(float(kwargs.get("vad_alpha", 1.0)),
-                                      1.0 - closure)
+        if semantic_pause:
+            run = object.__getattribute__(self, "_pause_run") + 1
+            object.__setattr__(self, "_pause_run", run)
+            alpha = min(1.0, run / object.__getattribute__(self, "_close_frames"))
+        elif close_strength:
+            object.__setattr__(self, "_pause_run", 0)
+            alpha = close_strength
+        else:
+            object.__setattr__(self, "_pause_run", 0)
+            alpha = 0.0
+        if alpha:
+            result = dict(x_d_info)
+            exp = np.array(x_d_info["exp"], copy=True)
+            lips = exp.reshape(-1, 3)
+            neutral = object.__getattribute__(self, "_neutral_lips")
+            lip_indices = list(_LIP_KEYPOINTS)
+            lips[lip_indices] = (1.0 - alpha) * lips[lip_indices] + alpha * neutral
+            result["exp"] = exp
+            x_d_info = result
         return self._obj(x_s_info, x_d_info, **kwargs)
 
     def __getattr__(self, name):
@@ -300,20 +305,16 @@ def install_semantic_pause_closure(sdk, next_pause, close_ms=120, offset_ms=0):
     neutral_lips = getattr(sdk, "_livetalking_neutral_lips", None)
     if neutral_lips is None:
         logger.warning("ditto semantic pause closure disabled: neutral lips unavailable")
-        return None
+        return
     close_frames = max(1, int(round(float(close_ms) / 40.0)))
-    # Positive DITTO_AV_OFFSET_MS delays playback audio, while this control is
-    # applied when the video frame is generated. Delay the marker on the same
-    # 40ms motion clock so visible closure coincides with audible silence.
     delay_frames = max(0, int(float(offset_ms) / 40.0))
-    wrapper = _SemanticPauseMotion(
-        sdk.motion_stitch, next_pause, close_frames,
+    sdk.motion_stitch = _SemanticPauseMotion(
+        sdk.motion_stitch, next_pause, neutral_lips, close_frames,
         delay_frames=delay_frames)
-    sdk.motion_stitch = wrapper
     logger.info(
-        "ditto semantic pause closure: %d frames (%dms), playback aligned by %d frames (%dms)",
+        "ditto semantic pause closure: %d frames (%dms), audio-aligned delay=%d frames (%dms)",
         close_frames, close_frames * 40, delay_frames, delay_frames * 40)
-    return wrapper
+    return sdk.motion_stitch
 
 
 def neutralize_sdk_source_lips(sdk, idle_path):
@@ -495,10 +496,7 @@ class DittoReal(BaseAvatar):
         self._t_build = time.perf_counter()   # [timing] session build start (= right after /offer)
         from stream_pipeline_online import StreamSDK
         _t = time.perf_counter()
-        logger.info("[ditto-timing] waiting for GPU model-init lock")
-        with GPU_INIT_LOCK:
-            logger.info("[ditto-timing] loading StreamSDK engines")
-            self.sdk = StreamSDK(self.cfg["cfg_pkl"], self.cfg["data_root"])
+        self.sdk = StreamSDK(self.cfg["cfg_pkl"], self.cfg["data_root"])
         logger.info("[ditto-timing] StreamSDK engine load: %.2fs", time.perf_counter() - _t)
 
         # Sliding-window buffer for hubert (see constants above). Starts with the
@@ -513,7 +511,7 @@ class DittoReal(BaseAvatar):
         self._pause_packets = []                 # pair 2 x 20ms TTS packets per frame
         self._pause_motion = None
         self._vad_silent_frames = 0
-        self._vad_rms = max(0.0, float(os.environ.get("DITTO_VAD_RMS", "0.006")))
+        self._vad_rms = max(0.0, float(os.environ.get("DITTO_VAD_RMS", "0.004")))
         self._prof = bool(os.environ.get("DITTO_PROF"))
         self._prof_t0 = self._prof_last = time.perf_counter()
         self._prof_audio_chunks = 0
@@ -617,7 +615,8 @@ class DittoReal(BaseAvatar):
         semantic = all(packet[0] for packet in self._pause_packets)
         strength = sum(packet[1] for packet in self._pause_packets) / len(
             self._pause_packets)
-        rms = max(packet[2] for packet in self._pause_packets)
+        rms = float(np.sqrt(sum(packet[2] for packet in self._pause_packets)
+                            / len(self._pause_packets)))
         if semantic:
             self._vad_silent_frames = 2
         elif rms <= self._vad_rms:
@@ -632,11 +631,11 @@ class DittoReal(BaseAvatar):
 
     def _queue_pause_packet(self, audio, datainfo):
         audio = np.asarray(audio, dtype=np.float32)
-        rms = float(np.sqrt(np.mean(audio * audio))) if audio.size else 0.0
+        power = float(np.mean(audio * audio)) if audio.size else 0.0
         self._pause_packets.append((
             bool(datainfo.get("semantic_pause")),
             max(0.0, min(float(datainfo.get("lip_close_strength", 0.0)), 1.0)),
-            rms,
+            power,
         ))
         if len(self._pause_packets) == _AUDIO_CHUNKS_PER_FRAME:
             self._flush_pause_packets()

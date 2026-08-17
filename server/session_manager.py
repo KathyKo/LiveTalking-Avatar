@@ -36,7 +36,6 @@ class SessionManager:
             self.sessions: Dict[str, BaseAvatar] = {}
             self.build_session_fn = None
             self.max_session = 1   # default, override via set_max_session()
-            self._build_lock = asyncio.Lock()
             self.initialized = True
 
     def set_max_session(self, n: int):
@@ -66,32 +65,23 @@ class SessionManager:
         if sessionid is None:
             sessionid = _rand_session_id()
             
-        # StreamSDK/TensorRT construction must not fan out when the proxy retries
-        # an offer that is still being built.
-        if self._build_lock.locked():
-            raise MaxSessionError("Avatar is still initializing; retry shortly")
-
-        # Pending None reservations count too. Ignoring them allowed every timed-
-        # out browser retry to start another expensive native model constructor.
-        active_count = len(self.sessions)
+        # Check whether the maximum session count has been reached
+        active_count = sum(1 for s in self.sessions.values() if s is not None)
         if active_count >= self.max_session:
             raise MaxSessionError(
                 f"Maximum session limit reached ({active_count}/{self.max_session})"
             )
 
-        async with self._build_lock:
-            logger.info('Creating sessionid=%s, current session num=%d', sessionid, active_count)
-            self.sessions[sessionid] = None
-            try:
-                avatar_session = await asyncio.get_event_loop().run_in_executor(
-                    None, self.build_session_fn, sessionid, params
-                )
-            except BaseException:
-                self.sessions.pop(sessionid, None)
-                logger.exception("Avatar session build failed: %s", sessionid)
-                raise
-            self.sessions[sessionid] = avatar_session
-            return sessionid
+        logger.info('Creating sessionid=%s, current session num=%d', sessionid, active_count)
+        # Reserve the slot in advance to prevent duplicates
+        self.sessions[sessionid] = None
+
+        # Build the session in a thread pool (loading the model is very expensive)
+        avatar_session = await asyncio.get_event_loop().run_in_executor(
+            None, self.build_session_fn, sessionid, params
+        )
+        self.sessions[sessionid] = avatar_session
+        return sessionid
         
     def add_session(self, sessionid: str, avatar_session: BaseAvatar):
         """Synchronously add a static or externally managed session (for non-server entry points)"""

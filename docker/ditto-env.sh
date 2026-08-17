@@ -38,7 +38,7 @@ export DITTO_ONLINE=${DITTO_ONLINE:-1}
 export DITTO_SMO_K_D=${DITTO_SMO_K_D:-1}
 export DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.2}
 export DITTO_PAUSE_CLOSE_MS=${DITTO_PAUSE_CLOSE_MS:-120}
-export DITTO_VAD_RMS=${DITTO_VAD_RMS:-0.006}
+export DITTO_VAD_RMS=${DITTO_VAD_RMS:-0.004}
 
 # Playback timing. Does not affect how a frame is rendered.
 export DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}
