@@ -551,14 +551,23 @@ function semanticBoundary(s, force = false) {
             const paragraph = s.slice(i + 1).match(/^[ \t]*\r?\n[ \t]*\r?\n/);
             return { end: i + 1 + (paragraph ? paragraph[0].length : 0), pauseMs: paragraph ? 900 : 520 };
         }
-        if (c === ':' && (i + 1 < s.length || force)) {
-            const listStart = s.slice(i + 1).match(/^[ \t]*\r?\n/);
-            if (listStart) return { end: i + 1 + listStart[0].length, pauseMs: 800 };
+        if (c === ':') {
+            // A spoken heading/name followed by a colon is a real pause even
+            // when the API keeps the following text on the same line. Do not
+            // split numeric times/IDs such as 02:22.
+            if (i + 1 >= s.length && !force) return null;
+            const next = s[i + 1] || '';
+            const numericColon = /\d/.test(s[i - 1] || '') && /\d/.test(next);
+            if (!numericColon && (!next || /\s/.test(next))) {
+                const trailingSpace = s.slice(i + 1).match(/^[ \t]*(?:\r?\n)?[ \t]*/);
+                return { end: i + 1 + (trailingSpace ? trailingSpace[0].length : 0), pauseMs: 800 };
+            }
         }
-        // A list item is a real semantic boundary. Consume the separator so
-        // names such as "The Meeting Point" can never be split by length.
-        if (i > 0 && s.startsWith(' - ', i)) {
-            return { end: i + 3, pauseMs: 280 };
+        // Accept inline dashes and Markdown/newline bullets. Consume the marker
+        // so names such as "The Meeting Point" remain intact in the next item.
+        const listMarker = i > 0 && s.slice(i).match(/^(?:[ \t]+|\r?\n[ \t]*)(?:[-*\u2022][ \t]+)/);
+        if (listMarker) {
+            return { end: i + listMarker[0].length, pauseMs: 280 };
         }
     }
     return force && s.trim() ? { end: s.length, pauseMs: 520 } : null;

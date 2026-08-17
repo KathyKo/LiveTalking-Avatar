@@ -243,7 +243,7 @@ def install_lip_response(sdk, response):
 
 
 class _SemanticPauseMotion:
-    """Apply phoneme/pause lip closure immediately before motion stitching."""
+    """Apply phoneme/pause lip closure in stitched output coordinates."""
 
     def __init__(self, motion_stitch, next_pause, neutral_lips, close_frames):
         object.__setattr__(self, "_obj", motion_stitch)
@@ -270,16 +270,19 @@ class _SemanticPauseMotion:
         else:
             object.__setattr__(self, "_pause_run", 0)
             alpha = 0.0
+        x_s, x_d = self._obj(x_s_info, x_d_info, **kwargs)
         if alpha:
-            result = dict(x_d_info)
-            exp = np.array(x_d_info["exp"], copy=True)
-            lips = exp.reshape(-1, 3)
-            neutral = object.__getattribute__(self, "_neutral_lips")
+            # x_d_info is still in the audio model's relative expression
+            # coordinates. Closing it there is undone/distorted by d0 mixing
+            # and the stitch network. Blend the final lip keypoints toward the
+            # neutralized source only after both transforms have completed.
+            x_d = np.array(x_d, copy=True)
             lip_indices = list(_LIP_KEYPOINTS)
-            lips[lip_indices] = (1.0 - alpha) * lips[lip_indices] + alpha * neutral
-            result["exp"] = exp
-            x_d_info = result
-        return self._obj(x_s_info, x_d_info, **kwargs)
+            x_d[:, lip_indices, :] = (
+                (1.0 - alpha) * x_d[:, lip_indices, :]
+                + alpha * np.asarray(x_s)[:, lip_indices, :]
+            )
+        return x_s, x_d
 
     def __getattr__(self, name):
         return getattr(object.__getattribute__(self, "_obj"), name)
