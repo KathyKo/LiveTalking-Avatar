@@ -48,7 +48,7 @@ export DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}
 export DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-260}
 # Keep the final transition independent from the A/V calibration offset. Raising
 # this value freezes the final generated frame longer before the 160ms blend.
-export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}
+export DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-260}
 
 # Keep the recorded closed-mouth idle.mp4 as the visible idle. Generation is
 # opt-in, and generating a comparison clip never makes the server play it.
