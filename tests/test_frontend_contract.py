@@ -70,16 +70,16 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert 'source "$APP_ROOT/docker/ditto-env.sh"' in start
     assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
-    assert "DITTO_EXP=${DITTO_EXP:-0.68}" in script
+    assert "DITTO_EXP=${DITTO_EXP:-0.75}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1024}" in script
-    assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.2}" in script
+    assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.0}" in script
     assert "DITTO_PAUSE_CLOSE_MS=${DITTO_PAUSE_CLOSE_MS:-120}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script
     assert "DITTO_START_BUFFER=${DITTO_START_BUFFER:-6}" in script
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-260}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-240}" in script
     assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-220}" in script
     assert "DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-0}" in script
     assert "DITTO_USE_GENERATED_IDLE=${DITTO_USE_GENERATED_IDLE:-0}" in script
