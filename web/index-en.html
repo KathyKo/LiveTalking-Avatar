@@ -826,7 +826,7 @@ function checkSpeaking() {
     }).then(r => r.json()).then(d => alert('Speaking: ' + JSON.stringify(d.data)));
 }
 
-// Populate the avatar switcher from the backend, marking the server default.
+// Populate the avatar switcher from the backend with user-facing names.
 async function loadAvatarList() {
     const sel = document.getElementById('avatarSelect');
     if (!sel) return;
@@ -845,7 +845,7 @@ async function loadAvatarList() {
         avatars.forEach(id => {
             const o = document.createElement('option');
             o.value = id;
-            o.textContent = id + (id === preferred ? ' (default)' : '');
+            o.textContent = id.replace(/^ditto_/, 'avatar_');
             if (id === preferred) o.selected = true;
             sel.appendChild(o);
         });

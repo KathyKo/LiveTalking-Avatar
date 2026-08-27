@@ -24,6 +24,8 @@ def test_avatar_frontend_contract():
     assert "const INITIAL_AVATAR_ID = 'ditto_woman';" in html
     assert "avatars.includes(INITIAL_AVATAR_ID)" in html
     assert "id === preferred" in html
+    assert "id.replace(/^ditto_/, 'avatar_')" in html
+    assert "' (default)'" not in html
     assert "agent_id: CHAT_AGENT_ID" in html
     assert "fetch('/avatar_timing'" in html
     assert '<audio id="audio"' not in html
@@ -120,7 +122,8 @@ def test_elevenlabs_forwards_pcm_while_streaming():
     assert "queue_frame(frame)" in tts
     assert "len(phoneme_tail) > _PHONEME_TAIL_FRAMES" in tts
     assert "self._emit([phoneme_tail.pop(0)], text, textevent, gain)" in tts
-    assert "np.clip(frame * gain, -1.0, 1.0), eventpoint)" in tts
+    assert "output = _level_frame(frame, gain)" in tts
+    assert "elevenlabs output level:" in tts
     assert "if len(held) >= _ESTIMATE_FRAMES:" in tts
     assert "re.split" not in tts
     assert "for _ in range(3)" not in tts

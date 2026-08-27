@@ -369,13 +369,16 @@ def _load_segment_gain():
     wanted = [
         node for node in tree.body
         if (isinstance(node, ast.Assign)
-            and any(getattr(t, "id", "").startswith(("_TARGET", "_MAX", "_CEILING"))
+            and any(getattr(t, "id", "").startswith(
+                ("_TARGET", "_MAX", "_CEILING", "_SPEECH_GATE"))
                     for t in node.targets))
-        or (isinstance(node, ast.FunctionDef) and node.name == "_segment_gain")
+        or (isinstance(node, ast.FunctionDef)
+            and node.name in ("_segment_gain", "_level_frame"))
     ]
     namespace = {"np": np, "os": __import__("os")}
     exec(compile(ast.Module(body=wanted, type_ignores=[]), "<gain>", "exec"), namespace)
-    return namespace["_segment_gain"], namespace["_TARGET_RMS"]
+    return (namespace["_segment_gain"], namespace["_level_frame"],
+            namespace["_TARGET_RMS"], namespace["_CEILING"])
 
 
 def _load_terminal_lip_close_strength():
@@ -408,7 +411,7 @@ def test_terminal_lip_close_strength_distinguishes_bilabial_and_nasal_endings():
 
 def test_segment_gain_matches_loudness_across_segments():
     """Hot and quiet segments must land at the same level, without clipping."""
-    gain, target = _load_segment_gain()
+    gain, level, target, _ = _load_segment_gain()
     rng = np.random.default_rng(0)
     noise = rng.standard_normal(3200).astype(np.float32)
     noise /= np.max(np.abs(noise))
@@ -417,7 +420,7 @@ def test_segment_gain_matches_loudness_across_segments():
         scaled = noise * (rms / float(np.sqrt(np.mean(np.square(noise)))))
         frames = [scaled[i:i + 320] for i in range(0, 3200, 320)]
         g = gain(frames)
-        out = np.concatenate([np.clip(f * g, -1.0, 1.0) for f in frames])
+        out = np.concatenate([level(f, g) for f in frames])
         return float(np.sqrt(np.mean(np.square(out)))), float(np.max(np.abs(out)))
 
     hot_rms, hot_peak = leveled(0.30)     # "Certainly!"
@@ -427,3 +430,26 @@ def test_segment_gain_matches_loudness_across_segments():
     # Silence must pass through untouched, not be amplified into noise.
     assert gain([np.zeros(320, dtype=np.float32)]) == 1.0
     assert gain([]) == 1.0
+
+
+def test_segment_gain_ignores_leading_silence_and_can_lift_quiet_speech():
+    gain, _, target, _ = _load_segment_gain()
+    silence = [np.zeros(320, dtype=np.float32) for _ in range(4)]
+    quiet = [np.full(320, 0.008, dtype=np.float32) for _ in range(4)]
+
+    g = gain(silence + quiet)
+    assert g > 4.0
+    assert abs(0.008 * g - target) < 0.01
+
+
+def test_level_frame_limits_hot_audio_without_clipping_or_retiming():
+    _, level, target, ceiling = _load_segment_gain()
+    frame = np.linspace(-1.0, 1.0, 320, dtype=np.float32)
+
+    output = level(frame, 4.0)
+
+    assert output.shape == frame.shape
+    assert output.dtype == np.float32
+    assert float(np.max(np.abs(output))) <= ceiling + 1e-6
+    assert np.allclose(output, frame * ceiling, atol=1e-6)
+    assert target > 0

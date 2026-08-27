@@ -12,9 +12,10 @@ from registry import register
 # request, and ElevenLabs picks the emphasis per request: "Certainly!" comes back
 # far hotter than a long sentence, so the avatar's volume jumps between them.
 _TARGET_RMS = float(os.environ.get("TTS_TARGET_RMS", "0.06"))   # ~ -24 dBFS
-_MAX_GAIN = float(os.environ.get("TTS_MAX_GAIN", "4.0"))
+_MAX_GAIN = float(os.environ.get("TTS_MAX_GAIN", "8.0"))
 _CEILING = float(os.environ.get("TTS_CEILING", "0.95"))
 _ESTIMATE_FRAMES = int(os.environ.get("TTS_ESTIMATE_FRAMES", "8"))   # 8 x 20ms
+_SPEECH_GATE_RMS = float(os.environ.get("TTS_SPEECH_GATE_RMS", "0.003"))
 _PHONEME_TAIL_FRAMES = max(
     1, int(round(float(os.environ.get("TTS_PHONEME_CLOSE_MS", "80")) / 20.0)))
 _N_CLOSE_STRENGTH = float(os.environ.get("TTS_N_CLOSE_STRENGTH", "0.45"))
@@ -54,13 +55,37 @@ def _segment_gain(frames):
     if not frames:
         return 1.0
     audio = np.concatenate(frames)
-    rms = float(np.sqrt(np.mean(np.square(audio))))
+    # ElevenLabs frequently starts a request with quiet consonants or padding.
+    # Measuring that padding as speech can select the maximum boost and make the
+    # following vowel jump in volume. Estimate loudness only from active 20ms
+    # frames and use their median, which is stable without buffering the segment.
+    frame_rms = np.asarray([
+        float(np.sqrt(np.mean(np.square(frame)))) for frame in frames if len(frame)
+    ])
+    active_rms = frame_rms[frame_rms >= _SPEECH_GATE_RMS]
+    if not len(active_rms):
+        return 1.0
+    rms = float(np.median(active_rms))
     peak = float(np.max(np.abs(audio)))
     if rms < 1e-4 or peak < 1e-4:
         return 1.0                      # silence carries no level to match
     # Only the boost is capped, so near-silence is not amplified into noise.
     # Attenuation is unbounded: a hot segment needs whatever cut it takes.
     return float(min(_TARGET_RMS / rms, _CEILING / peak, _MAX_GAIN))
+
+
+def _level_frame(frame, gain):
+    """Apply one stable segment gain and a non-clipping emergency peak limit."""
+    output = np.asarray(frame, dtype=np.float32) * float(gain)
+    if not output.size:
+        return output
+
+    peak = float(np.max(np.abs(output)))
+    if peak > _CEILING:
+        # Scale the complete frame instead of clipping individual samples. This
+        # guarantees headroom without flat-topped clipping distortion.
+        output *= _CEILING / peak
+    return output
 
 
 @register("tts", "elevenlabs")
@@ -71,6 +96,9 @@ class ElevenLabsTTS(BaseTTS):
         self._voice_id = opt.REF_FILE or "SEWXl8lPSO01tdGbWECX"
         self._previous_text = ""
         self._first_frame = True
+        self._level_energy = 0.0
+        self._level_samples = 0
+        self._level_peak = 0.0
 
     def flush_talk(self):
         super().flush_talk()
@@ -83,8 +111,13 @@ class ElevenLabsTTS(BaseTTS):
                 eventpoint = {"status": "start", "text": text}
                 self._first_frame = False
             eventpoint.update(**textevent)
-            self.parent.put_audio_frame(
-                np.clip(frame * gain, -1.0, 1.0), eventpoint)
+            output = _level_frame(frame, gain)
+            self._level_energy += float(np.sum(np.square(output)))
+            self._level_samples += output.size
+            if output.size:
+                self._level_peak = max(
+                    self._level_peak, float(np.max(np.abs(output))))
+            self.parent.put_audio_frame(output, eventpoint)
 
     def txt_to_audio(self, msg: tuple[str, dict]):
         text, textevent = msg
@@ -96,6 +129,9 @@ class ElevenLabsTTS(BaseTTS):
             return
 
         self._first_frame = True
+        self._level_energy = 0.0
+        self._level_samples = 0
+        self._level_peak = 0.0
         started = time.perf_counter()
         # Frames held back while the segment's gain is still being estimated.
         held = []
@@ -167,6 +203,12 @@ class ElevenLabsTTS(BaseTTS):
             if close_strength:
                 tail_event["lip_close_strength"] = close_strength * index / tail_count
             self._emit([frame], text, tail_event, gain)
+
+        if self._level_samples:
+            output_rms = (self._level_energy / self._level_samples) ** 0.5
+            logger.info(
+                "elevenlabs output level: rms=%.4f peak=%.4f target=%.4f",
+                output_rms, self._level_peak, _TARGET_RMS)
 
         self._send_silence_tail(text, textevent, final)
         self._previous_text = text
