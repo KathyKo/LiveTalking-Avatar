@@ -20,7 +20,10 @@ def test_avatar_frontend_contract():
     assert "row.hidden = true" in html
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
-    assert "const CHAT_AGENT_ID = 'JTC_M';" in html
+    assert (
+        "const CHAT_AGENT_ID = "
+        "'DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8';" in html
+    )
     assert "const INITIAL_AVATAR_ID = 'ditto_woman';" in html
     assert "avatars.includes(INITIAL_AVATAR_ID)" in html
     assert "id === preferred" in html

@@ -7,7 +7,9 @@ if TYPE_CHECKING:
 from utils.logger import logger
 
 API_URL = os.getenv("CHAT_API_URL", "https://voncierge-lang-agent.hipster-virtual.com/chat/sse")
-AGENT_ID = os.getenv("CHAT_AGENT_ID", "JTC_M")
+AGENT_ID = os.getenv(
+    "CHAT_AGENT_ID", "DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8"
+)
 
 # Strip markdown symbols that TTS would read aloud
 _STRIP = str.maketrans("", "", "*#`")
