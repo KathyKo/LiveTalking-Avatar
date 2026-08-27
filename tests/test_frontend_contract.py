@@ -30,6 +30,11 @@ def test_avatar_frontend_contract():
     assert "id.replace(/^ditto_/, 'avatar_')" in html
     assert "' (default)'" not in html
     assert "agent_id: CHAT_AGENT_ID" in html
+    ditto_env = (ROOT / "docker" / "ditto-env.sh").read_text(encoding="utf-8")
+    assert (
+        "CHAT_AGENT_ID=${CHAT_AGENT_ID:-"
+        "DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8}" in ditto_env
+    )
     assert "fetch('/avatar_timing'" in html
     assert '<audio id="audio"' not in html
     assert "stream.addTrack(evt.track)" in html
