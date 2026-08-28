@@ -5,7 +5,7 @@ APP_ROOT=/opt/livetalking
 DITTO_ROOT=/opt/ditto-talkinghead
 WORKSPACE_ROOT=${WORKSPACE_ROOT:-/workspace}
 CACHE_ROOT=${CACHE_ROOT:-$WORKSPACE_ROOT/cache}
-AVATAR_ID=${AVATAR_ID:-ditto_woman}
+AVATAR_ID=${AVATAR_ID:-ditto_man}
 DEFAULT_AVATAR_ROOT=/opt/default-avatars
 
 # MODEL_ROOT + every DITTO_*/ASR_* default. Sourced (not duplicated) so a shell
@@ -94,7 +94,7 @@ exec python app.py \
     --avatar_id "$AVATAR_ID" \
     --transport webrtc \
     --tts elevenlabs \
-    --REF_FILE "${VOICE_ID:-SEWXl8lPSO01tdGbWECX}" \
+    --REF_FILE "${VOICE_ID:-aSXZu6bgEOS8MXVRzjPi}" \
     --listenport "${LISTEN_PORT:-8010}" \
     --fps 25 \
     "$@"

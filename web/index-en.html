@@ -185,8 +185,8 @@
         .landing-prompts { width: 100%; margin-bottom: 20px; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); }
         .prompt-row { width: 100%; overflow: hidden; }
         .prompt-row + .prompt-row { margin-top: 9px; }
-        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 48s linear infinite; }
-        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 54s; }
+        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 34s linear infinite; }
+        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 38s; }
         .prompt-group { display: flex; flex: 0 0 auto; gap: 10px; padding-right: 10px; }
         .prompt-chip { flex: 0 0 auto; min-height: 42px; padding: 9px 18px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 999px; background: rgba(25, 31, 43, 0.62); color: #fff; font-size: 0.9rem; font-weight: 600; white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2); }
         .prompt-chip:hover { background: rgba(39, 49, 68, 0.88); border-color: rgba(255, 255, 255, 0.65); }
@@ -216,6 +216,7 @@
         .chat-bot { position: relative; margin-right: auto; padding-bottom: 10px; background: #e9eef5; color: var(--kiosk-ink); }
         .chat-bot p:last-child { margin-bottom: 0; }
         .bubble-feedback { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+        .bubble-feedback[hidden] { display: none; }
         .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #315ee8; font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
         .feedback-button:hover { background: rgba(49, 94, 232, 0.11); transform: translateY(-1px); }
         .feedback-button.selected { background: #315ee8; color: #fff; }
@@ -242,8 +243,8 @@
         .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
         .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 10px; border: 0; border-radius: 5px; background: #080b12; }
         .chat-media-frame { aspect-ratio: 16 / 9; max-height: none; }
-        .link-qr { display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; margin-top: 10px; padding: 8px; border: 1px solid #ced8e6; border-radius: 5px; background: #fff; }
-        .link-qr img { width: 112px; height: 112px; padding: 4px; background: #fff; }
+        .link-qr { display: flex; align-items: center; gap: 14px; width: fit-content; max-width: 100%; margin-top: 12px; padding: 0; border: 0; background: transparent; }
+        .link-qr img { width: 156px; height: 156px; padding: 0; background: #fff; }
         .link-qr-copy { display: grid; gap: 4px; min-width: 0; }
         .link-qr-label { color: #334155; font-size: 0.8rem; font-weight: 700; overflow-wrap: anywhere; }
         .link-qr a { color: var(--kiosk-brand-dark); font-size: 0.78rem; overflow-wrap: anywhere; }
@@ -300,7 +301,7 @@
     <span class="session-badge disconnected visually-hidden" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
     <span class="visually-hidden" id="sessionIdDisplay">SID: -</span>
     <section id="landingView" class="view" aria-label="Avatar welcome screen">
-        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="../assets/woman.mp4"></video>
+        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="../assets/source.mp4"></video>
         <div class="landing-shade"></div>
         <div class="landing-content">
             <div class="landing-copy">
@@ -440,6 +441,7 @@ let outputAudioUnlocked = false;
 let connecting = false;
 let reconnectTimer = null;
 let sessionEnded = false;
+let sessionWaiters = [];
 
 function updateStatus(connected) {
     const badge = document.getElementById('statusBadge');
@@ -455,6 +457,11 @@ function updateStatus(connected) {
 function setSessionId(sid) {
     sessionid = sid;
     document.getElementById('sessionIdDisplay').textContent = 'SID: ' + (sid || '-');
+    if (sid) {
+        const waiters = sessionWaiters;
+        sessionWaiters = [];
+        waiters.forEach(resolve => resolve(true));
+    }
 }
 
 function showError(msg) {
@@ -504,51 +511,35 @@ function enterConversation() {
     document.getElementById('video').play().catch(() => {});
 }
 
-function waitForSession(timeoutMs = 12000) {
-    return new Promise(resolve => {
-        const startedAt = performance.now();
-        const poll = () => {
-            if (sessionid) return resolve(true);
-            if (performance.now() - startedAt >= timeoutMs) return resolve(false);
-            setTimeout(poll, 100);
-        };
-        poll();
-    });
+function ensureSession() {
+    if (sessionid) return Promise.resolve(true);
+    sessionEnded = false;
+    start();
+    return new Promise(resolve => sessionWaiters.push(resolve));
 }
 
 async function enterConversationAndTalk() {
     enterConversation();
     unlockOutputAudio();
-    if (!sessionid) {
-        start();
-        const ready = await waitForSession();
-        if (!ready) {
-            showError('The avatar is still connecting. Please try again shortly.');
-            return;
-        }
-    }
+    if (!sessionid && !(await ensureSession())) return;
     if (!micOn) await toggleMic();
 }
 
 async function enterConversationWithPrompt(prompt) {
     enterConversation();
     unlockOutputAudio();
-    if (!sessionid) {
-        start();
-        const ready = await waitForSession();
-        if (!ready) {
-            showError('The avatar is still connecting. Please try again shortly.');
-            return;
-        }
-    }
-    document.getElementById('txtMessage').value = prompt;
-    await sendText();
+    addBubble('user', prompt);
+    if (!sessionid && !(await ensureSession())) return;
+    await sendText(prompt, false);
 }
 
 async function endConversation() {
     stopMic(false);
     await interrupt();
     sessionEnded = true;
+    const waiters = sessionWaiters;
+    sessionWaiters = [];
+    waiters.forEach(resolve => resolve(false));
     latencyTurn++;
     speakGen++;
     speakQueue = Promise.resolve();
@@ -788,7 +779,7 @@ async function start() {
 // --- Text / Chat ---
 const CHAT_API_URL = 'https://voncierge-lang-agent.hipster-virtual.com/chat/sse';
 const CHAT_AGENT_ID = 'DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8';
-const INITIAL_AVATAR_ID = 'ditto_woman';
+const INITIAL_AVATAR_ID = 'ditto_man';
 
 function unlockOutputAudio() {
     const video = document.getElementById('video');
@@ -897,6 +888,7 @@ function addBubble(who, text) {
         div.appendChild(content);
         const feedback = document.createElement('div');
         feedback.className = 'bubble-feedback';
+        feedback.hidden = true;
         feedback.setAttribute('role', 'group');
         feedback.setAttribute('aria-label', 'Rate this response');
         feedback.innerHTML = '<button class="feedback-button" type="button" data-feedback="up" title="Helpful" aria-label="Helpful" aria-pressed="false"><i class="bi bi-hand-thumbs-up-fill" aria-hidden="true"></i></button>' +
@@ -975,7 +967,7 @@ function createLinkQr(url) {
     wrap.className = 'link-qr';
     const qr = document.createElement('img');
     qr.alt = 'QR code for ' + linkLabel(url);
-    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&format=svg&data=' + encodeURIComponent(href);
+    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&format=svg&data=' + encodeURIComponent(href);
     const copy = document.createElement('div');
     copy.className = 'link-qr-copy';
     const label = document.createElement('span');
@@ -993,6 +985,8 @@ function createLinkQr(url) {
 
 function renderBotBubble(el, text) {
     const content = el.querySelector('.bubble-content') || el;
+    const feedback = el.querySelector('.bubble-feedback');
+    if (feedback) feedback.hidden = !text.trim();
     const appendMarkdown = markdown => {
         if (!markdown) return;
         if (!window.marked || !window.DOMPurify) {
@@ -1107,18 +1101,19 @@ async function watchAvatarTiming(startedAt, turn, metrics, baseline) {
     }
 }
 
-async function sendText() {
+async function sendText(textOverride = null, showUserBubble = true) {
     unlockOutputAudio();
     const el = document.getElementById('txtMessage');
     const out = document.getElementById('chatResponse');
-    const text = el.value.trim();
+    const text = (textOverride == null ? el.value : textOverride).trim();
     const mode = document.getElementById('txtType').value;
-    if (!text || !sessionid) return alert('Please connect WebRTC first');
+    if (!text) return;
+    if (!sessionid && !(await ensureSession())) return;
     const startedAt = performance.now();
     const turn = ++latencyTurn;
     el.value = '';
 
-    addBubble('user', text);
+    if (showUserBubble) addBubble('user', text);
 
     if (mode === 'echo') {
         const botBubble = addBubble('bot', 'Echo');
@@ -1266,8 +1261,9 @@ async function switchAvatar() {
     await start();   // start()/negotiate() reads #avatarSelect
 }
 
-// Load the switcher, then auto-connect to the default avatar.
-loadAvatarList().then(() => start());
+// Select the preferred avatar before negotiating. Running these concurrently
+// could create a woman session first and only change the dropdown to man later.
+loadAvatarList().finally(() => start());
 
 </script>
 </body>

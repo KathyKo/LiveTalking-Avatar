@@ -23,10 +23,15 @@ def test_avatar_frontend_contract():
     assert ".replace(/(?:https?:\\/\\/|www\\.)\\S+/g, ' ')" in html
     assert 'id="landingView"' in html
     assert 'id="landingVideo"' in html
-    assert 'src="../assets/woman.mp4"' in html
+    assert 'src="../assets/source.mp4"' in html
     assert 'id="conversationView" class="main-layout" hidden' in html
     assert "function enterConversationAndTalk()" in html
     assert "function enterConversationWithPrompt(prompt)" in html
+    assert "addBubble('user', prompt)" in html
+    assert "await ensureSession()" in html
+    assert "await sendText(prompt, false)" in html
+    assert "async function sendText(textOverride = null, showUserBubble = true)" in html
+    assert "const text = (textOverride == null ? el.value : textOverride).trim()" in html
     assert "function endConversation()" in html
     assert "function updateLandingSource()" in html
     assert "function setPreviewSource(video, sourceUrl)" in html
@@ -45,12 +50,15 @@ def test_avatar_frontend_contract():
     assert "document.getElementById('landingView').hidden = false" in html
     assert "if (sessionEnded || reconnectTimer) return" in html
     assert "className = 'bubble-feedback'" in html
+    assert "feedback.hidden = true" in html
+    assert "feedback.hidden = !text.trim()" in html
     assert 'data-feedback="up"' in html
     assert 'data-feedback="down"' in html
     assert "bi-hand-thumbs-up-fill" in html
     assert "bi-hand-thumbs-down-fill" in html
-    assert "document.getElementById('txtMessage').value = prompt" in html
-    assert "await sendText()" in html
+    assert "loadAvatarList().finally(() => start())" in html
+    assert "function ensureSession()" in html
+    assert "sessionWaiters.push(resolve)" in html
     assert "row.hidden = true" in html
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
@@ -58,7 +66,7 @@ def test_avatar_frontend_contract():
         "const CHAT_AGENT_ID = "
         "'DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8';" in html
     )
-    assert "const INITIAL_AVATAR_ID = 'ditto_woman';" in html
+    assert "const INITIAL_AVATAR_ID = 'ditto_man';" in html
     assert "avatars.includes(INITIAL_AVATAR_ID)" in html
     assert "id === preferred" in html
     assert "id.replace(/^ditto_/, 'avatar_')" in html
