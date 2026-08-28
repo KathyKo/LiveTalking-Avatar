@@ -185,8 +185,8 @@
         .landing-prompts { width: 100%; margin-bottom: 20px; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); }
         .prompt-row { width: 100%; overflow: hidden; }
         .prompt-row + .prompt-row { margin-top: 9px; }
-        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 34s linear infinite; }
-        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 38s; }
+        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 20s linear infinite; }
+        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 22s; }
         .prompt-group { display: flex; flex: 0 0 auto; gap: 10px; padding-right: 10px; }
         .prompt-chip { flex: 0 0 auto; min-height: 42px; padding: 9px 18px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 999px; background: rgba(25, 31, 43, 0.62); color: #fff; font-size: 0.9rem; font-weight: 600; white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2); }
         .prompt-chip:hover { background: rgba(39, 49, 68, 0.88); border-color: rgba(255, 255, 255, 0.65); }
@@ -301,7 +301,7 @@
     <span class="session-badge disconnected visually-hidden" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
     <span class="visually-hidden" id="sessionIdDisplay">SID: -</span>
     <section id="landingView" class="view" aria-label="Avatar welcome screen">
-        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="../assets/source.mp4"></video>
+        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="/api/avatar-source/ditto_man?v=source-2"></video>
         <div class="landing-shade"></div>
         <div class="landing-content">
             <div class="landing-copy">
@@ -479,7 +479,7 @@ function avatarPreviewUrl(avatarId) {
     if (window.location.protocol === 'file:') {
         return avatarId === 'ditto_man' ? '../assets/source.mp4' : '../assets/woman.mp4';
     }
-    return '/api/avatar-source/' + encodeURIComponent(avatarId);
+    return '/api/avatar-source/' + encodeURIComponent(avatarId) + '?v=source-2';
 }
 
 function setPreviewSource(video, sourceUrl) {

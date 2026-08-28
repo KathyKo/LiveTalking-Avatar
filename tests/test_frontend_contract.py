@@ -23,7 +23,7 @@ def test_avatar_frontend_contract():
     assert ".replace(/(?:https?:\\/\\/|www\\.)\\S+/g, ' ')" in html
     assert 'id="landingView"' in html
     assert 'id="landingVideo"' in html
-    assert 'src="../assets/source.mp4"' in html
+    assert 'src="/api/avatar-source/ditto_man?v=source-2"' in html
     assert 'id="conversationView" class="main-layout" hidden' in html
     assert "function enterConversationAndTalk()" in html
     assert "function enterConversationWithPrompt(prompt)" in html
@@ -40,6 +40,8 @@ def test_avatar_frontend_contract():
     assert "'../assets/source.mp4'" in html
     assert "'../assets/woman.mp4'" in html
     assert "'/api/avatar-source/' + encodeURIComponent(avatarId)" in html
+    assert "animation: prompt-scroll 20s linear infinite" in html
+    assert "animation-duration: 22s" in html
     assert "setPreviewSource(document.getElementById('video'), sourceUrl)" in html
     assert "Press to Talk" in html
     assert 'class="landing-prompts"' in html
