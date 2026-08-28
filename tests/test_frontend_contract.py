@@ -23,7 +23,7 @@ def test_avatar_frontend_contract():
     assert ".replace(/(?:https?:\\/\\/|www\\.)\\S+/g, ' ')" in html
     assert 'id="landingView"' in html
     assert 'id="landingVideo"' in html
-    assert 'src="/api/avatar-source/ditto_man?v=source-2"' in html
+    assert 'src="/api/avatar-idle/ditto_man?v=idle-1"' in html
     assert 'id="conversationView" class="main-layout" hidden' in html
     assert "function enterConversationAndTalk()" in html
     assert "function enterConversationWithPrompt(prompt)" in html
@@ -37,9 +37,9 @@ def test_avatar_frontend_contract():
     assert "function setPreviewSource(video, sourceUrl)" in html
     assert "function avatarPreviewUrl(avatarId)" in html
     assert "window.location.protocol === 'file:'" in html
-    assert "'../assets/source.mp4'" in html
+    assert "'../assets/idle.mp4'" in html
     assert "'../assets/woman.mp4'" in html
-    assert "'/api/avatar-source/' + encodeURIComponent(avatarId)" in html
+    assert "'/api/avatar-idle/' + encodeURIComponent(avatarId)" in html
     assert "animation: prompt-scroll 20s linear infinite" in html
     assert "animation-duration: 22s" in html
     assert "setPreviewSource(document.getElementById('video'), sourceUrl)" in html
@@ -124,6 +124,13 @@ def test_avatar_source_endpoint_is_limited_to_source_video():
     assert '"ditto_woman": APP_ROOT / "assets" / "woman.mp4"' in routes
     assert '"ditto_man": APP_ROOT / "assets" / "source.mp4"' in routes
     assert 'app.router.add_get("/api/avatar-source/{avatar_id}", avatar_source_media)' in routes
+
+
+def test_avatar_idle_endpoint_is_limited_to_idle_video():
+    routes = (ROOT / "server" / "routes.py").read_text(encoding="utf-8")
+    assert "async def avatar_idle_media(request):" in routes
+    assert 'idle = avatar_dir / "idle.mp4"' in routes
+    assert 'app.router.add_get("/api/avatar-idle/{avatar_id}", avatar_idle_media)' in routes
 
 
 def test_ditto_defaults_to_fast_high_resolution_rendering():

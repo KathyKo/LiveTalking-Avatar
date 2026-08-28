@@ -301,7 +301,7 @@
     <span class="session-badge disconnected visually-hidden" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
     <span class="visually-hidden" id="sessionIdDisplay">SID: -</span>
     <section id="landingView" class="view" aria-label="Avatar welcome screen">
-        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="/api/avatar-source/ditto_man?v=source-2"></video>
+        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="/api/avatar-idle/ditto_man?v=idle-1"></video>
         <div class="landing-shade"></div>
         <div class="landing-content">
             <div class="landing-copy">
@@ -477,9 +477,9 @@ function selectedAvatarId() {
 
 function avatarPreviewUrl(avatarId) {
     if (window.location.protocol === 'file:') {
-        return avatarId === 'ditto_man' ? '../assets/source.mp4' : '../assets/woman.mp4';
+        return avatarId === 'ditto_man' ? '../assets/idle.mp4' : '../assets/woman.mp4';
     }
-    return '/api/avatar-source/' + encodeURIComponent(avatarId) + '?v=source-2';
+    return '/api/avatar-idle/' + encodeURIComponent(avatarId) + '?v=idle-1';
 }
 
 function setPreviewSource(video, sourceUrl) {

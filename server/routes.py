@@ -229,6 +229,32 @@ async def avatar_source_media(request):
     raise web.HTTPNotFound()
 
 
+async def avatar_idle_media(request):
+    """Serve only a selected avatar's idle video for local preview states."""
+    avatar_id = request.match_info.get("avatar_id", "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", avatar_id):
+        raise web.HTTPNotFound()
+
+    avatars_root = APP_ROOT / "data" / "avatars"
+    avatar_dir = (avatars_root / avatar_id).resolve()
+    try:
+        avatar_dir.relative_to(avatars_root.resolve())
+    except ValueError:
+        raise web.HTTPNotFound()
+
+    idle = avatar_dir / "idle.mp4"
+    if idle.is_file():
+        return web.FileResponse(idle)
+
+    bundled_idle = {
+        "ditto_man": APP_ROOT / "assets" / "idle.mp4",
+        "ditto_woman": APP_ROOT / "assets" / "woman.mp4",
+    }.get(avatar_id)
+    if bundled_idle and bundled_idle.is_file():
+        return web.FileResponse(bundled_idle)
+    raise web.HTTPNotFound()
+
+
 async def admin_config(request):
     """Admin: get global configuration parameters"""
     try:
@@ -291,6 +317,7 @@ def setup_routes(app):
     app.router.add_post("/avatar_timing", avatar_timing)
     app.router.add_get("/api/avatars", list_avatars)
     app.router.add_get("/api/avatar-source/{avatar_id}", avatar_source_media)
+    app.router.add_get("/api/avatar-idle/{avatar_id}", avatar_idle_media)
     app.router.add_get("/api/admin/config", admin_config)
     app.router.add_get("/api/admin/sessions", admin_sessions)
     app.router.add_get("/api/iceservers", ice_servers_route)
