@@ -16,6 +16,7 @@ def test_avatar_frontend_contract():
     assert "(?:mp4|mov|webm)" in html
     assert "https://www.youtube-nocookie.com/embed/" in html
     assert "function youtubeEmbedUrl(url)" in html
+    assert "if (!youtube) content.appendChild(createLinkQr(url))" in html
     assert "function createLinkQr(url)" in html
     assert "className = 'link-qr'" in html
     assert "api.qrserver.com" in html
@@ -47,11 +48,17 @@ def test_avatar_frontend_contract():
     assert 'class="landing-prompts"' in html
     assert html.count('class="prompt-track"') == 2
     assert 'class="avatar-end-button"' in html
-    assert "sessionEnded = true" in html
     assert "document.getElementById('chatResponse').replaceChildren()" in html
     assert "document.getElementById('landingView').hidden = false" in html
+    end_conversation = html.split("async function endConversation()", 1)[1].split("// --- Voice input", 1)[0]
+    assert "peer.close()" not in end_conversation
+    assert "setSessionId(null)" not in end_conversation
+    assert "video.srcObject = null" not in end_conversation
+    assert "await interrupt()" in end_conversation
     assert "if (sessionEnded || reconnectTimer) return" in html
     assert "className = 'bubble-feedback'" in html
+    assert ".bubble-feedback { position: absolute; right: 9px; bottom: 5px;" in html
+    assert "link.textContent = 'Open link'" not in html
     assert "feedback.hidden = true" in html
     assert "feedback.hidden = !text.trim()" in html
     assert 'data-feedback="up"' in html

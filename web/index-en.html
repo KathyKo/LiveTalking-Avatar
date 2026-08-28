@@ -214,8 +214,9 @@
         .chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 0.95rem; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
         .chat-user { margin-left: auto; background: var(--kiosk-brand); color: #fff; }
         .chat-bot { position: relative; margin-right: auto; padding-bottom: 10px; background: #e9eef5; color: var(--kiosk-ink); }
+        .chat-bot .bubble-content { padding-right: 64px; }
         .chat-bot p:last-child { margin-bottom: 0; }
-        .bubble-feedback { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+        .bubble-feedback { position: absolute; right: 9px; bottom: 5px; display: flex; gap: 2px; }
         .bubble-feedback[hidden] { display: none; }
         .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #315ee8; font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
         .feedback-button:hover { background: rgba(49, 94, 232, 0.11); transform: translateY(-1px); }
@@ -239,15 +240,12 @@
         #app:not(.conversation-active) #avatarControl { top: 20px; right: 20px; }
         #app.conversation-active #avatarControl { top: 14px; left: calc(60% + 18px); right: auto; color: var(--kiosk-ink); border-color: transparent; background: transparent; backdrop-filter: none; }
 
-        .latency-row { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; padding-top: 9px; border-top: 1px solid rgba(23, 32, 51, 0.13); color: #64748b; font-size: 0.72rem; }
+        .latency-row { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; padding: 9px 68px 2px 0; border-top: 1px solid rgba(23, 32, 51, 0.13); color: #64748b; font-size: 0.72rem; }
         .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
-        .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 10px; border: 0; border-radius: 5px; background: #080b12; }
+        .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 8px; border: 0; border-radius: 5px; background: #080b12; }
         .chat-media-frame { aspect-ratio: 16 / 9; max-height: none; }
-        .link-qr { display: flex; align-items: center; gap: 14px; width: fit-content; max-width: 100%; margin-top: 12px; padding: 0; border: 0; background: transparent; }
+        .link-qr { display: block; width: fit-content; max-width: 100%; margin-top: 8px; padding: 0; border: 0; background: transparent; }
         .link-qr img { width: 156px; height: 156px; padding: 0; background: #fff; }
-        .link-qr-copy { display: grid; gap: 4px; min-width: 0; }
-        .link-qr-label { color: #334155; font-size: 0.8rem; font-weight: 700; overflow-wrap: anywhere; }
-        .link-qr a { color: var(--kiosk-brand-dark); font-size: 0.78rem; overflow-wrap: anywhere; }
 
         @media (max-width: 900px) {
             .main-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 48%) minmax(0, 52%); }
@@ -536,27 +534,12 @@ async function enterConversationWithPrompt(prompt) {
 async function endConversation() {
     stopMic(false);
     await interrupt();
-    sessionEnded = true;
-    const waiters = sessionWaiters;
-    sessionWaiters = [];
-    waiters.forEach(resolve => resolve(false));
     latencyTurn++;
     speakGen++;
     speakQueue = Promise.resolve();
-    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-    if (pc) {
-        const peer = pc;
-        pc = null;
-        peer.close();
-    }
-    connecting = false;
-    setSessionId(null);
-    remoteStream = null;
     const video = document.getElementById('video');
-    video.srcObject = null;
     video.muted = true;
     outputAudioUnlocked = false;
-    updateStatus(false);
     document.getElementById('chatResponse').replaceChildren();
     document.getElementById('txtMessage').value = '';
     document.getElementById('offerError').style.display = 'none';
@@ -930,14 +913,6 @@ function splitTrailingUrlPunctuation(rawUrl) {
     return { url, trailing };
 }
 
-function linkLabel(url) {
-    try {
-        return new URL(normalizeExternalUrl(url)).hostname.replace(/^www\./i, '');
-    } catch (_) {
-        return 'Open link';
-    }
-}
-
 function youtubeEmbedUrl(url) {
     try {
         const parsed = new URL(normalizeExternalUrl(url));
@@ -966,20 +941,9 @@ function createLinkQr(url) {
     const wrap = document.createElement('div');
     wrap.className = 'link-qr';
     const qr = document.createElement('img');
-    qr.alt = 'QR code for ' + linkLabel(url);
+    qr.alt = 'QR code';
     qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&format=svg&data=' + encodeURIComponent(href);
-    const copy = document.createElement('div');
-    copy.className = 'link-qr-copy';
-    const label = document.createElement('span');
-    label.className = 'link-qr-label';
-    label.textContent = linkLabel(url);
-    const link = document.createElement('a');
-    link.href = href;
-    link.target = '_blank';
-    link.rel = 'noopener noreferrer';
-    link.textContent = 'Open link';
-    copy.append(label, link);
-    wrap.append(qr, copy);
+    wrap.append(qr);
     return wrap;
 }
 
@@ -1025,7 +989,7 @@ function renderBotBubble(el, text) {
             video.src = url;
             content.appendChild(video);
         }
-        content.appendChild(createLinkQr(url));
+        if (!youtube) content.appendChild(createLinkQr(url));
         appendMarkdown(split.trailing);
         offset = match.index + match[0].length;
     }
