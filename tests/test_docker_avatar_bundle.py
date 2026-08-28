@@ -4,6 +4,17 @@ from pathlib import Path
 ROOT = Path(__file__).parents[1]
 
 
+def test_homepage_avatar_previews_are_committed_to_the_docker_context():
+    dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
+    gitignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "WORKDIR /opt/livetalking" in dockerfile
+    assert "COPY . ." in dockerfile
+    assert "!assets/woman.mp4" in gitignore
+    assert "!assets/source.mp4" in gitignore
+    assert (ROOT / "assets" / "woman.mp4").is_file()
+    assert (ROOT / "assets" / "source.mp4").is_file()
+
+
 def test_default_ditto_avatars_are_bundled_without_overwriting_volume():
     dockerfile = (ROOT / "Dockerfile").read_text(encoding="utf-8")
     start = (ROOT / "docker" / "start.sh").read_text(encoding="utf-8")

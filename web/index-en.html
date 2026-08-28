@@ -154,12 +154,201 @@
             .btn-danger-custom { padding-left: 10px; padding-right: 10px; }
         }
     </style>
+    <style>
+        :root {
+            --kiosk-ink: #172033;
+            --kiosk-muted: #64748b;
+            --kiosk-line: #d9e1ec;
+            --kiosk-canvas: #f7f9fc;
+            --kiosk-brand: #3f63e8;
+            --kiosk-brand-dark: #2746bd;
+            --kiosk-danger: #df3e48;
+        }
+        * { box-sizing: border-box; }
+        html, body { width: 100%; height: 100%; overflow: hidden; }
+        body { margin: 0; background: #fff; color: var(--kiosk-ink); font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+        button, select, textarea { font: inherit; }
+        button { cursor: pointer; }
+        button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(63, 99, 232, 0.28); outline-offset: 2px; }
+        #app { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #fff; }
+        .view { position: absolute; inset: 0; min-width: 0; min-height: 0; }
+        .view[hidden] { display: none !important; }
+        .session-badge, #sessionIdDisplay { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+        #landingView { background: #111827; isolation: isolate; }
+        #landingVideo { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 42%; background: #111827; }
+        .landing-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 12, 20, 0.02) 25%, rgba(8, 12, 20, 0.2) 55%, rgba(8, 12, 20, 0.72) 100%); pointer-events: none; }
+        .landing-content { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 0 clamp(24px, 4vh, 44px); text-align: center; color: #fff; }
+        .landing-copy { width: min(760px, calc(100% - 32px)); margin: 0 auto 20px; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5); }
+        .landing-copy h1 { margin: 0; font-size: clamp(2rem, 3.6vw, 3.5rem); line-height: 1.08; letter-spacing: 0; font-weight: 760; }
+        .landing-copy p { margin: 8px 0 0; font-size: clamp(1rem, 1.5vw, 1.28rem); font-weight: 600; }
+        .landing-prompts { width: 100%; margin-bottom: 20px; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); }
+        .prompt-row { width: 100%; overflow: hidden; }
+        .prompt-row + .prompt-row { margin-top: 9px; }
+        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 48s linear infinite; }
+        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 54s; }
+        .prompt-group { display: flex; flex: 0 0 auto; gap: 10px; padding-right: 10px; }
+        .prompt-chip { flex: 0 0 auto; min-height: 42px; padding: 9px 18px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 999px; background: rgba(25, 31, 43, 0.62); color: #fff; font-size: 0.9rem; font-weight: 600; white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2); }
+        .prompt-chip:hover { background: rgba(39, 49, 68, 0.88); border-color: rgba(255, 255, 255, 0.65); }
+        @keyframes prompt-scroll { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
+        @keyframes prompt-scroll-reverse { from { transform: translate3d(-50%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
+        .landing-actions { display: flex; justify-content: center; }
+        .landing-talk { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-width: 238px; min-height: 56px; padding: 0 26px; border: 2px solid rgba(255,255,255,0.88); border-radius: 8px; background: rgba(12, 16, 24, 0.84); color: #fff; box-shadow: 0 10px 26px rgba(0,0,0,0.3); font-weight: 750; transition: background 160ms ease, transform 160ms ease; }
+        .landing-talk:hover { background: rgba(25, 33, 48, 0.98); transform: translateY(-1px); }
+
+        #conversationView { background: #fff; }
+        .main-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr); width: 100%; height: 100%; min-height: 0; overflow: hidden; background: #fff; }
+        .avatar-pane { min-width: 0; min-height: 0; overflow: hidden; background: #0d1118; }
+        .avatar-stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
+        #video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; border-radius: 0; background: #111827 !important; }
+        .avatar-end-button { position: absolute; z-index: 4; left: 50%; bottom: 26px; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-width: 188px; min-height: 52px; padding: 0 22px; border: 2px solid #ff5a43; border-radius: 8px; background: rgba(17, 20, 27, 0.88); color: #fff; font-weight: 760; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); backdrop-filter: blur(8px); }
+        .avatar-end-button:hover { background: rgba(35, 39, 49, 0.96); }
+        .avatar-end-button i { color: #ff5a43; }
+        #offerError { position: absolute; z-index: 3; top: 18px; left: 18px; right: 18px; margin: 0; border-radius: 6px; }
+        .chat-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 1px solid var(--kiosk-line); background: #fff; }
+        .chat-toolbar { flex: 0 0 72px; padding: 0 22px; display: flex; align-items: center; border-bottom: 1px solid var(--kiosk-line); background: #fff; }
+        .chat-toolbar h2 { margin: 0; color: var(--kiosk-ink); font-size: 1rem; font-weight: 720; }
+        .chat-toolbar p { margin: 4px 0 0; color: var(--kiosk-muted); font-size: 0.78rem; }
+        .chat-card { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+        #chatResponse { flex: 1; min-height: 0 !important; height: auto !important; overflow-y: auto !important; overscroll-behavior: contain; padding: 18px 20px; border: 0 !important; border-radius: 0; background: var(--kiosk-canvas) !important; }
+        .chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 0.95rem; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
+        .chat-user { margin-left: auto; background: var(--kiosk-brand); color: #fff; }
+        .chat-bot { position: relative; margin-right: auto; padding-bottom: 10px; background: #e9eef5; color: var(--kiosk-ink); }
+        .chat-bot p:last-child { margin-bottom: 0; }
+        .bubble-feedback { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+        .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #315ee8; font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
+        .feedback-button:hover { background: rgba(49, 94, 232, 0.11); transform: translateY(-1px); }
+        .feedback-button.selected { background: #315ee8; color: #fff; }
+        .chat-composer { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 14px 16px; border-top: 1px solid var(--kiosk-line); background: #fff; }
+        #txtMessage { flex: 1; min-width: 0; min-height: 44px; height: 44px; padding: 10px 14px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: var(--kiosk-ink); }
+        #txtMessage::placeholder { color: #94a3b8; }
+        #btnMic, .composer-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 7px; font-size: 1.05rem; }
+        #btnMic { border: 0; background: var(--kiosk-brand); color: #fff; }
+        #btnMic:hover { background: var(--kiosk-brand-dark); }
+        #btnMic.listening { background: var(--kiosk-danger); }
+        .btn-danger-custom { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 13px; border: 0; border-radius: 7px; background: var(--kiosk-danger); color: #fff; font-weight: 700; }
+        .btn-outline-custom { width: 44px; height: 44px; padding: 0; border: 1px solid #b8c5d9; border-radius: 7px; color: #52627b; background: #fff; }
+        .btn-danger-custom:hover { background: #c92f3a; }
+        .btn-outline-custom:hover { border-color: var(--kiosk-brand); color: var(--kiosk-brand); }
+
+        #avatarControl { position: absolute; z-index: 12; display: inline-flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.45); border-radius: 7px; background: rgba(15, 23, 42, 0.68); backdrop-filter: blur(10px); color: #fff; }
+        #avatarControl > i { font-size: 1rem; }
+        #avatarSelect { min-width: 158px; width: auto; padding: 0; border: 0; background: transparent; color: inherit; font-weight: 700; cursor: pointer; box-shadow: none; }
+        #avatarSelect option { color: var(--kiosk-ink); background: #fff; }
+        #app:not(.conversation-active) #avatarControl { top: 20px; right: 20px; }
+        #app.conversation-active #avatarControl { top: 14px; left: calc(60% + 18px); right: auto; color: var(--kiosk-ink); border-color: transparent; background: transparent; backdrop-filter: none; }
+
+        .latency-row { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; padding-top: 9px; border-top: 1px solid rgba(23, 32, 51, 0.13); color: #64748b; font-size: 0.72rem; }
+        .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
+        .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 10px; border: 0; border-radius: 5px; background: #080b12; }
+        .chat-media-frame { aspect-ratio: 16 / 9; max-height: none; }
+        .link-qr { display: flex; align-items: center; gap: 12px; width: fit-content; max-width: 100%; margin-top: 10px; padding: 8px; border: 1px solid #ced8e6; border-radius: 5px; background: #fff; }
+        .link-qr img { width: 112px; height: 112px; padding: 4px; background: #fff; }
+        .link-qr-copy { display: grid; gap: 4px; min-width: 0; }
+        .link-qr-label { color: #334155; font-size: 0.8rem; font-weight: 700; overflow-wrap: anywhere; }
+        .link-qr a { color: var(--kiosk-brand-dark); font-size: 0.78rem; overflow-wrap: anywhere; }
+
+        @media (max-width: 900px) {
+            .main-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 48%) minmax(0, 52%); }
+            .chat-pane { border-top: 1px solid var(--kiosk-line); border-left: 0; }
+            .chat-toolbar { flex-basis: 56px; padding: 0 14px; }
+            #chatResponse { padding: 14px; }
+            .chat-composer { padding: 10px; }
+            #app.conversation-active #avatarControl { top: calc(48% + 10px); left: auto; right: 10px; }
+            .landing-content { padding-bottom: 18px; }
+            .landing-copy { margin-bottom: 14px; }
+            .landing-prompts { margin-bottom: 14px; }
+            .prompt-chip { min-height: 38px; padding: 7px 14px; font-size: 0.82rem; }
+        }
+        @media (max-width: 560px) {
+            .landing-content { padding: 20px; }
+            .landing-copy h1 { font-size: 2rem; }
+            .landing-talk { min-width: 190px; }
+            #avatarControl { top: 12px !important; right: 12px !important; left: auto !important; }
+            #avatarSelect { min-width: 130px; }
+            .btn-danger-custom span { display: none; }
+            .chat-bubble { font-size: 0.9rem; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .prompt-track { animation-play-state: paused; }
+            .landing-talk, .prompt-chip, .feedback-button { transition: none; }
+        }
+
+        #conversationView[hidden] { display: none !important; }
+        #conversationView .avatar-pane .glass-card { display: flex; flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+        #conversationView .avatar-pane .card-header { display: none !important; }
+        #conversationView .avatar-pane .card-body { display: flex; flex: 1; min-height: 0; padding: 0; }
+        #conversationView .avatar-stage { flex: 1; }
+        #conversationView .avatar-pane .mt-3 { margin-top: 0 !important; }
+        #conversationView .chat-pane .glass-card { display: flex; flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+        #conversationView .chat-pane .card-body { display: flex; flex: 1; min-height: 0; padding: 0 16px 82px; }
+        #conversationView .chat-toolbar { justify-content: space-between; }
+        #conversationView .avatar-selector { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--kiosk-ink); box-shadow: none; }
+        #conversationView .avatar-selector > i { color: var(--kiosk-brand); }
+        #conversationView #avatarSelect { min-width: 158px; color: var(--kiosk-ink); }
+        #app > .chat-composer { display: none; position: absolute; z-index: 8; left: 60%; right: 0; bottom: 0; }
+        #app.conversation-active > .chat-composer { display: flex; }
+        @media (max-width: 900px) {
+            #conversationView .chat-pane .card-body { padding-bottom: 70px; }
+            #app > .chat-composer { left: 0; }
+        }
+    </style>
 </head>
 <body>
 
-<div class="container-fluid app-shell px-4">
+<div id="app">
     <span class="session-badge disconnected visually-hidden" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
     <span class="visually-hidden" id="sessionIdDisplay">SID: -</span>
+    <section id="landingView" class="view" aria-label="Avatar welcome screen">
+        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="../assets/woman.mp4"></video>
+        <div class="landing-shade"></div>
+        <div class="landing-content">
+            <div class="landing-copy">
+                <h1>Welcome to HPB ITQ</h1>
+                <p>How can I assist you?</p>
+            </div>
+            <div class="landing-prompts" aria-label="Suggested questions">
+                <div class="prompt-row">
+                    <div class="prompt-track">
+                        <div class="prompt-group">
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('How should I brush my teeth properly?')">How should I brush my teeth properly?</button>
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('Why do I need to floss?')">Why do I need to floss?</button>
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('What causes cavities?')">What causes cavities?</button>
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('What foods are bad for my teeth?')">What foods are bad for my teeth?</button>
+                        </div>
+                        <div class="prompt-group" aria-hidden="true">
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('How should I brush my teeth properly?')">How should I brush my teeth properly?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('Why do I need to floss?')">Why do I need to floss?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('What causes cavities?')">What causes cavities?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('What foods are bad for my teeth?')">What foods are bad for my teeth?</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="prompt-row reverse">
+                    <div class="prompt-track">
+                        <div class="prompt-group">
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('Why are my gums bleeding?')">Why are my gums bleeding?</button>
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('How can I prevent tooth decay?')">How can I prevent tooth decay?</button>
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('I just had dental treatment. What should I do now?')">I just had dental treatment. What should I do now?</button>
+                            <button class="prompt-chip" type="button" onclick="enterConversationWithPrompt('When should I tell the dentist something is wrong?')">When should I tell the dentist something is wrong?</button>
+                        </div>
+                        <div class="prompt-group" aria-hidden="true">
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('Why are my gums bleeding?')">Why are my gums bleeding?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('How can I prevent tooth decay?')">How can I prevent tooth decay?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('I just had dental treatment. What should I do now?')">I just had dental treatment. What should I do now?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('When should I tell the dentist something is wrong?')">When should I tell the dentist something is wrong?</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="landing-actions">
+                <button class="landing-talk" type="button" onclick="enterConversationAndTalk()">
+                    <i class="bi bi-mic-fill" aria-hidden="true"></i>
+                    Press to Talk
+                </button>
+            </div>
+        </div>
+    </section>
     <!-- Quick Links -->
     <div class="row g-3 mb-2 d-none">
         <div class="col-md-3">
@@ -191,7 +380,7 @@
         </div>
     </div>
 
-    <div class="main-layout">
+    <div id="conversationView" class="main-layout" hidden>
         <!-- Left Column: Connection + Video -->
         <div class="avatar-pane">
             <!-- 1. WebRTC Connection -->
@@ -201,6 +390,10 @@
                     <div id="offerError" class="alert alert-danger mt-3" role="alert" style="display:none;"></div>
                     <div class="mt-3 avatar-stage">
                         <video id="video" autoplay playsinline muted></video>
+                        <button class="avatar-end-button" type="button" onclick="endConversation()" title="End conversation and return home">
+                            <i class="bi bi-stop-fill" aria-hidden="true"></i>
+                            End
+                        </button>
                     </div>
                 </div>
             </div>
@@ -209,6 +402,10 @@
         <!-- Right Column: Drivers + Actions -->
         <div class="chat-pane">
             <div class="chat-toolbar">
+                <div class="chat-title">
+                    <h2>Conversation</h2>
+                    <p>Ask anything about your health and wellbeing.</p>
+                </div>
                 <div class="avatar-selector">
                     <i class="bi bi-person-video3" aria-hidden="true"></i>
                     <label class="visually-hidden" for="avatarSelect">Select avatar</label>
@@ -242,6 +439,7 @@ let remoteStream = null;
 let outputAudioUnlocked = false;
 let connecting = false;
 let reconnectTimer = null;
+let sessionEnded = false;
 
 function updateStatus(connected) {
     const badge = document.getElementById('statusBadge');
@@ -264,6 +462,121 @@ function showError(msg) {
     el.textContent = msg;
     el.style.display = 'block';
     setTimeout(() => { el.style.display = 'none'; }, 8000);
+}
+
+function selectedAvatarId() {
+    return document.getElementById('avatarSelect')?.value || INITIAL_AVATAR_ID;
+}
+
+function avatarPreviewUrl(avatarId) {
+    if (window.location.protocol === 'file:') {
+        return avatarId === 'ditto_man' ? '../assets/source.mp4' : '../assets/woman.mp4';
+    }
+    return '/api/avatar-source/' + encodeURIComponent(avatarId);
+}
+
+function setPreviewSource(video, sourceUrl) {
+    if (!video || video.srcObject) return;
+    if (video.dataset.avatarSource === sourceUrl && video.getAttribute('src') === sourceUrl) return;
+    video.dataset.avatarSource = sourceUrl;
+    video.src = sourceUrl;
+    video.loop = true;
+    video.muted = true;
+    video.load();
+    video.play().catch(() => {});
+}
+
+function updateLandingSource() {
+    const landingVideo = document.getElementById('landingVideo');
+    const avatarId = selectedAvatarId();
+    const sourceUrl = avatarPreviewUrl(avatarId);
+    setPreviewSource(landingVideo, sourceUrl);
+    setPreviewSource(document.getElementById('video'), sourceUrl);
+}
+
+function enterConversation() {
+    sessionEnded = false;
+    updateLandingSource();
+    const app = document.getElementById('app');
+    app.classList.add('conversation-active');
+    document.getElementById('landingView').hidden = true;
+    document.getElementById('conversationView').hidden = false;
+    document.getElementById('video').play().catch(() => {});
+}
+
+function waitForSession(timeoutMs = 12000) {
+    return new Promise(resolve => {
+        const startedAt = performance.now();
+        const poll = () => {
+            if (sessionid) return resolve(true);
+            if (performance.now() - startedAt >= timeoutMs) return resolve(false);
+            setTimeout(poll, 100);
+        };
+        poll();
+    });
+}
+
+async function enterConversationAndTalk() {
+    enterConversation();
+    unlockOutputAudio();
+    if (!sessionid) {
+        start();
+        const ready = await waitForSession();
+        if (!ready) {
+            showError('The avatar is still connecting. Please try again shortly.');
+            return;
+        }
+    }
+    if (!micOn) await toggleMic();
+}
+
+async function enterConversationWithPrompt(prompt) {
+    enterConversation();
+    unlockOutputAudio();
+    if (!sessionid) {
+        start();
+        const ready = await waitForSession();
+        if (!ready) {
+            showError('The avatar is still connecting. Please try again shortly.');
+            return;
+        }
+    }
+    document.getElementById('txtMessage').value = prompt;
+    await sendText();
+}
+
+async function endConversation() {
+    stopMic(false);
+    await interrupt();
+    sessionEnded = true;
+    latencyTurn++;
+    speakGen++;
+    speakQueue = Promise.resolve();
+    if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+    if (pc) {
+        const peer = pc;
+        pc = null;
+        peer.close();
+    }
+    connecting = false;
+    setSessionId(null);
+    remoteStream = null;
+    const video = document.getElementById('video');
+    video.srcObject = null;
+    video.muted = true;
+    outputAudioUnlocked = false;
+    updateStatus(false);
+    document.getElementById('chatResponse').replaceChildren();
+    document.getElementById('txtMessage').value = '';
+    document.getElementById('offerError').style.display = 'none';
+    const app = document.getElementById('app');
+    app.classList.remove('conversation-active');
+    document.getElementById('conversationView').hidden = true;
+    document.getElementById('landingView').hidden = false;
+    updateLandingSource();
+    const landingVideo = document.getElementById('landingVideo');
+    landingVideo.currentTime = 0;
+    landingVideo.play().catch(() => {});
 }
 
 // --- Voice input (mic → /api/asr → textarea → send) ---
@@ -413,14 +726,15 @@ function negotiate(peer) {
 }
 
 function scheduleReconnect(delay = 2000) {
-    if (reconnectTimer) return;
+    if (sessionEnded || reconnectTimer) return;
     reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        if (!pc || ['failed', 'closed', 'disconnected'].includes(pc.connectionState)) start();
+        if (!sessionEnded && (!pc || ['failed', 'closed', 'disconnected'].includes(pc.connectionState))) start();
     }, delay);
 }
 
 async function start() {
+    if (sessionEnded) return;
     if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;
     if (pc) { const old = pc; pc = null; old.close(); }
     connecting = true;
@@ -443,7 +757,10 @@ async function start() {
             stream.addTrack(evt.track);
         }
         remoteStream = stream;
+        video.pause();
+        video.removeAttribute('src');
         video.srcObject = stream;
+        video.loop = false;
         video.muted = !outputAudioUnlocked;
         video.play().catch(() => {});
     });
@@ -476,7 +793,9 @@ const INITIAL_AVATAR_ID = 'ditto_woman';
 function unlockOutputAudio() {
     const video = document.getElementById('video');
     outputAudioUnlocked = true;
-    video.muted = false;
+    // Keep the local source-video preview silent. The remote WebRTC stream is
+    // unmuted as soon as its first track arrives.
+    video.muted = !video.srcObject;
     video.play().catch(() => {});
 }
 
@@ -576,6 +895,26 @@ function addBubble(who, text) {
         content.className = 'bubble-content';
         content.textContent = text;
         div.appendChild(content);
+        const feedback = document.createElement('div');
+        feedback.className = 'bubble-feedback';
+        feedback.setAttribute('role', 'group');
+        feedback.setAttribute('aria-label', 'Rate this response');
+        feedback.innerHTML = '<button class="feedback-button" type="button" data-feedback="up" title="Helpful" aria-label="Helpful" aria-pressed="false"><i class="bi bi-hand-thumbs-up-fill" aria-hidden="true"></i></button>' +
+            '<button class="feedback-button" type="button" data-feedback="down" title="Not helpful" aria-label="Not helpful" aria-pressed="false"><i class="bi bi-hand-thumbs-down-fill" aria-hidden="true"></i></button>';
+        feedback.addEventListener('click', event => {
+            const button = event.target.closest('.feedback-button');
+            if (!button) return;
+            const selected = button.classList.contains('selected');
+            feedback.querySelectorAll('.feedback-button').forEach(item => {
+                item.classList.remove('selected');
+                item.setAttribute('aria-pressed', 'false');
+            });
+            if (!selected) {
+                button.classList.add('selected');
+                button.setAttribute('aria-pressed', 'true');
+            }
+        });
+        div.appendChild(feedback);
     }
     out.appendChild(div);
     out.scrollTop = out.scrollHeight;
@@ -583,35 +922,107 @@ function addBubble(who, text) {
 }
 
 const VIDEO_URL_RE = /`?(https?:\/\/[^\s`<>"']+?\.(?:mp4|mov|webm)(?:\?[^\s`<>"']*)?)`?/gi;
-const CHAT_URL_RE = /`?(https?:\/\/[^\s`<>"')]+)`?/gi;
+const CHAT_URL_RE = /`?((?:https?:\/\/|www\.)[^\s`<>"')]+)`?/gi;
 
-function isAirsquireTour(url) {
-    try {
-        return new URL(url).hostname.endsWith('airsquire.ai');
-    } catch (_) {
-        return false;
+function normalizeExternalUrl(url) {
+    return /^https?:\/\//i.test(url) ? url : 'https://' + url;
+}
+
+function splitTrailingUrlPunctuation(rawUrl) {
+    let url = rawUrl;
+    let trailing = '';
+    while (url && /[.,;:!?]/.test(url[url.length - 1])) {
+        trailing = url[url.length - 1] + trailing;
+        url = url.slice(0, -1);
     }
+    return { url, trailing };
+}
+
+function linkLabel(url) {
+    try {
+        return new URL(normalizeExternalUrl(url)).hostname.replace(/^www\./i, '');
+    } catch (_) {
+        return 'Open link';
+    }
+}
+
+function youtubeEmbedUrl(url) {
+    try {
+        const parsed = new URL(normalizeExternalUrl(url));
+        const host = parsed.hostname.replace(/^www\./i, '').toLowerCase();
+        let id = '';
+        if (host === 'youtu.be') id = parsed.pathname.split('/').filter(Boolean)[0] || '';
+        else if (host === 'youtube.com' || host.endsWith('.youtube.com')) {
+            if (parsed.pathname.startsWith('/embed/')) id = parsed.pathname.split('/')[2] || '';
+            else if (parsed.pathname.startsWith('/shorts/')) id = parsed.pathname.split('/')[2] || '';
+            else id = parsed.searchParams.get('v') || '';
+        }
+        return /^[A-Za-z0-9_-]{11}$/.test(id)
+            ? 'https://www.youtube-nocookie.com/embed/' + id + '?rel=0'
+            : null;
+    } catch (_) {
+        return null;
+    }
+}
+
+function isDirectVideo(url) {
+    return /\.(?:mp4|mov|webm)(?:\?[^\s`<>"']*)?$/i.test(url);
+}
+
+function createLinkQr(url) {
+    const href = normalizeExternalUrl(url);
+    const wrap = document.createElement('div');
+    wrap.className = 'link-qr';
+    const qr = document.createElement('img');
+    qr.alt = 'QR code for ' + linkLabel(url);
+    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=160x160&format=svg&data=' + encodeURIComponent(href);
+    const copy = document.createElement('div');
+    copy.className = 'link-qr-copy';
+    const label = document.createElement('span');
+    label.className = 'link-qr-label';
+    label.textContent = linkLabel(url);
+    const link = document.createElement('a');
+    link.href = href;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = 'Open link';
+    copy.append(label, link);
+    wrap.append(qr, copy);
+    return wrap;
 }
 
 function renderBotBubble(el, text) {
     const content = el.querySelector('.bubble-content') || el;
-    if (!window.marked || !window.DOMPurify) {
-        content.textContent = text;
-        return;
-    }
     const appendMarkdown = markdown => {
         if (!markdown) return;
+        if (!window.marked || !window.DOMPurify) {
+            content.appendChild(document.createTextNode(markdown));
+            return;
+        }
         const template = document.createElement('template');
         template.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
         content.appendChild(template.content);
     };
     content.replaceChildren();
+    // Preserve a Markdown link's human label, but route its URL through the
+    // same embedded-media/QR rendering path as a plain URL.
+    text = text.replace(/\[([^\]]+)\]\(\s*((?:https?:\/\/|www\.)[^\s)]+)\s*\)/gi, '$1 $2');
     let offset = 0;
     for (const match of text.matchAll(CHAT_URL_RE)) {
         appendMarkdown(text.slice(offset, match.index));
-        const url = match[1];
-        const directVideo = /\.(?:mp4|mov|webm)(?:\?[^\s`<>"']*)?$/i.test(url);
-        if (directVideo) {
+        const split = splitTrailingUrlPunctuation(match[1]);
+        const url = normalizeExternalUrl(split.url);
+        const youtube = youtubeEmbedUrl(url);
+        if (youtube) {
+            const frame = document.createElement('iframe');
+            frame.className = 'chat-media-frame';
+            frame.src = youtube;
+            frame.title = 'YouTube video';
+            frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+            frame.allowFullscreen = true;
+            frame.referrerPolicy = 'strict-origin-when-cross-origin';
+            content.appendChild(frame);
+        } else if (isDirectVideo(url)) {
             const video = document.createElement('video');
             video.className = 'chat-media';
             video.controls = true;
@@ -619,22 +1030,9 @@ function renderBotBubble(el, text) {
             video.preload = 'metadata';
             video.src = url;
             content.appendChild(video);
-        } else if (isAirsquireTour(url)) {
-            const tour = document.createElement('div');
-            tour.className = 'tour-qr';
-            const qr = document.createElement('img');
-            qr.alt = 'QR code for Interactive 360 Tour';
-            qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=144x144&format=svg&data=' + encodeURIComponent(url);
-            const link = document.createElement('a');
-            link.href = url;
-            link.target = '_blank';
-            link.rel = 'noopener noreferrer';
-            link.textContent = 'Open interactive 360 tour';
-            tour.append(qr, link);
-            content.appendChild(tour);
-        } else {
-            appendMarkdown(match[0]);
         }
+        content.appendChild(createLinkQr(url));
+        appendMarkdown(split.trailing);
         offset = match.index + match[0].length;
     }
     appendMarkdown(text.slice(offset));
@@ -648,7 +1046,7 @@ function toSpeechText(text) {
         .replace(/(?:🗺️?\s*)?Interactive 360°?\s*Tour(?:\s*\(powered by Airsquire\))?\s*:/gi, ' ')
         .replace(VIDEO_URL_RE, ' ')
         .replace(/!?\[([^\]]*)\]\(https?:\/\/[^)]+\)/g, '$1')
-        .replace(/https?:\/\/\S+/g, ' ')
+        .replace(/(?:https?:\/\/|www\.)\S+/g, ' ')
         .replace(/\b(?:id|token|share)=[A-Za-z0-9_-]+/gi, ' ')
         .replace(/[*#_`>~]/g, '')
         .replace(/\s+/g, ' ')
@@ -664,7 +1062,8 @@ function addLatencyRow(bubble) {
         '<span hidden>First TTS: <strong></strong></span>' +
         '<span hidden>Complete response: <strong></strong></span>' +
         '<span hidden>Avatar started: <strong></strong></span>';
-    bubble.appendChild(row);
+    const feedback = bubble.querySelector('.bubble-feedback');
+    bubble.insertBefore(row, feedback || null);
     const values = row.querySelectorAll('strong');
     return { firstChar: values[0], firstTts: values[1], complete: values[2], avatar: values[3] };
 }
@@ -849,6 +1248,7 @@ async function loadAvatarList() {
             if (id === preferred) o.selected = true;
             sel.appendChild(o);
         });
+        updateLandingSource();
     } catch (e) { console.warn('avatar list failed', e); }
 }
 
@@ -862,6 +1262,7 @@ async function switchAvatar() {
     setSessionId(null);
     document.getElementById('video').srcObject = null;
     remoteStream = null;
+    updateLandingSource();
     await start();   // start()/negotiate() reads #avatarSelect
 }
 

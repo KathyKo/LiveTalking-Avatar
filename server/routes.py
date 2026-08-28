@@ -4,9 +4,14 @@
 
 import json
 import asyncio
+import re
+from pathlib import Path
 from aiohttp import web
 
 from utils.logger import logger
+
+
+APP_ROOT = Path(__file__).resolve().parent.parent
 
 
 # ─── Route helper functions ─────────────────────────────────────────────────
@@ -196,6 +201,34 @@ async def list_avatars(request):
     return json_ok(data={"avatars": items})
 
 
+async def avatar_source_media(request):
+    """Serve only a selected avatar's source video for the kiosk landing view."""
+    avatar_id = request.match_info.get("avatar_id", "")
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", avatar_id):
+        raise web.HTTPNotFound()
+
+    bundled_previews = {
+        "ditto_woman": APP_ROOT / "assets" / "woman.mp4",
+        "ditto_man": APP_ROOT / "assets" / "source.mp4",
+    }
+    bundled_source = bundled_previews.get(avatar_id)
+    if bundled_source and bundled_source.is_file():
+        return web.FileResponse(bundled_source)
+
+    avatars_root = APP_ROOT / "data" / "avatars"
+    avatar_dir = (avatars_root / avatar_id).resolve()
+    try:
+        avatar_dir.relative_to(avatars_root.resolve())
+    except ValueError:
+        raise web.HTTPNotFound()
+
+    for filename in ("source.mp4", "source.webm", "source.mov"):
+        source = avatar_dir / filename
+        if source.is_file():
+            return web.FileResponse(source)
+    raise web.HTTPNotFound()
+
+
 async def admin_config(request):
     """Admin: get global configuration parameters"""
     try:
@@ -257,6 +290,7 @@ def setup_routes(app):
     app.router.add_post("/is_speaking", is_speaking)
     app.router.add_post("/avatar_timing", avatar_timing)
     app.router.add_get("/api/avatars", list_avatars)
+    app.router.add_get("/api/avatar-source/{avatar_id}", avatar_source_media)
     app.router.add_get("/api/admin/config", admin_config)
     app.router.add_get("/api/admin/sessions", admin_sessions)
     app.router.add_get("/api/iceservers", ice_servers_route)

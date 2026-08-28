@@ -11,12 +11,46 @@ def test_avatar_frontend_contract():
     ))
     assert 'id="latencyFirst"' not in html
     assert "template.innerHTML = DOMPurify.sanitize(marked.parse(markdown))" in html
+    assert "content.replaceChildren()" in html
     assert "className = 'chat-media'" in html
     assert "(?:mp4|mov|webm)" in html
-    assert "className = 'tour-qr'" in html
+    assert "https://www.youtube-nocookie.com/embed/" in html
+    assert "function youtubeEmbedUrl(url)" in html
+    assert "function createLinkQr(url)" in html
+    assert "className = 'link-qr'" in html
     assert "api.qrserver.com" in html
-    assert "content.replaceChildren()" in html
-    assert "s.startsWith('https://', i)" in html
+    assert "const CHAT_URL_RE = /`?((?:https?:\\/\\/|www\\.)" in html
+    assert ".replace(/(?:https?:\\/\\/|www\\.)\\S+/g, ' ')" in html
+    assert 'id="landingView"' in html
+    assert 'id="landingVideo"' in html
+    assert 'src="../assets/woman.mp4"' in html
+    assert 'id="conversationView" class="main-layout" hidden' in html
+    assert "function enterConversationAndTalk()" in html
+    assert "function enterConversationWithPrompt(prompt)" in html
+    assert "function endConversation()" in html
+    assert "function updateLandingSource()" in html
+    assert "function setPreviewSource(video, sourceUrl)" in html
+    assert "function avatarPreviewUrl(avatarId)" in html
+    assert "window.location.protocol === 'file:'" in html
+    assert "'../assets/source.mp4'" in html
+    assert "'../assets/woman.mp4'" in html
+    assert "'/api/avatar-source/' + encodeURIComponent(avatarId)" in html
+    assert "setPreviewSource(document.getElementById('video'), sourceUrl)" in html
+    assert "Press to Talk" in html
+    assert 'class="landing-prompts"' in html
+    assert html.count('class="prompt-track"') == 2
+    assert 'class="avatar-end-button"' in html
+    assert "sessionEnded = true" in html
+    assert "document.getElementById('chatResponse').replaceChildren()" in html
+    assert "document.getElementById('landingView').hidden = false" in html
+    assert "if (sessionEnded || reconnectTimer) return" in html
+    assert "className = 'bubble-feedback'" in html
+    assert 'data-feedback="up"' in html
+    assert 'data-feedback="down"' in html
+    assert "bi-hand-thumbs-up-fill" in html
+    assert "bi-hand-thumbs-down-fill" in html
+    assert "document.getElementById('txtMessage').value = prompt" in html
+    assert "await sendText()" in html
     assert "row.hidden = true" in html
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
@@ -42,19 +76,18 @@ def test_avatar_frontend_contract():
     assert "overflow: hidden;" in html
     assert "height: 100dvh" in html
     assert "grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr)" in html
-    assert "grid-template-rows: minmax(0, 1fr) 76px" in html
+    assert "#conversationView[hidden] { display: none !important; }" in html
+    assert "#app.conversation-active > .chat-composer { display: flex; }" in html
     assert html.index('class="chat-toolbar"') < html.index('id="chatResponse"')
     assert html.index('id="chatResponse"') < html.index('class="chat-composer"')
     assert "#chatResponse { flex: 1;" in html
     assert "overflow-y: auto !important" in html
     assert 'id="btnMic" type="button" onclick="toggleMic()"' in html
     assert html.count('id="btnMic"') == 1
-    assert "Press to Talk" not in html
     assert 'onclick="sendText()"' not in html
     assert "function renderMicButton(listening)" in html
-    assert '<span><i class="bi bi-chat-text-fill"></i> Chat</span>' not in html
     assert '<select id="txtType" class="visually-hidden"' in html
-    assert ".chat-bubble { max-width: 94%;" in html
+    assert ".chat-bubble { width: fit-content; max-width: 100%;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
@@ -70,6 +103,17 @@ def test_avatar_frontend_contract():
     assert "pause_ms: pauseMs" in html
     assert "final, sessionid" in html
     assert "queueSpeak('', false, 20, true)" in html
+
+
+def test_avatar_source_endpoint_is_limited_to_source_video():
+    routes = (ROOT / "server" / "routes.py").read_text(encoding="utf-8")
+    assert "async def avatar_source_media(request):" in routes
+    assert 're.fullmatch(r"[A-Za-z0-9_-]+", avatar_id)' in routes
+    assert 'for filename in ("source.mp4", "source.webm", "source.mov")' in routes
+    assert 'APP_ROOT = Path(__file__).resolve().parent.parent' in routes
+    assert '"ditto_woman": APP_ROOT / "assets" / "woman.mp4"' in routes
+    assert '"ditto_man": APP_ROOT / "assets" / "source.mp4"' in routes
+    assert 'app.router.add_get("/api/avatar-source/{avatar_id}", avatar_source_media)' in routes
 
 
 def test_ditto_defaults_to_fast_high_resolution_rendering():
