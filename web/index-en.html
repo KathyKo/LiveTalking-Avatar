@@ -519,7 +519,9 @@ function ensureSession() {
 async function enterConversationAndTalk() {
     enterConversation();
     unlockOutputAudio();
-    if (!sessionid && !(await ensureSession())) return;
+    // ASR does not depend on the avatar session. Start both in parallel so a
+    // cold Ditto/WebRTC initialization never blocks microphone capture.
+    if (!sessionid) ensureSession();
     if (!micOn) await toggleMic();
 }
 
@@ -584,8 +586,8 @@ function down16k(buf, inRate) {
 async function toggleMic() {
     unlockOutputAudio();   // this click is a user gesture — unlock avatar audio playback now
     if (micOn) { stopMic(true); return; }
-    if (!sessionid) return alert('Please connect WebRTC first');
-    interrupt();   // stop the avatar so it listens instead of talking over you (keeps its voice out of the mic)
+    if (sessionid) interrupt();
+    else ensureSession();
     try {
         micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e) { return alert('Microphone permission denied'); }
@@ -612,7 +614,7 @@ async function toggleMic() {
         src.connect(micNode);
         micNode.connect(micCtx.destination);
     };
-    micWs.onmessage = (e) => {
+    micWs.onmessage = async (e) => {
         const msg = JSON.parse(e.data);
         if (msg.is_final) {
             // strip SenseVoice emotion emojis and symbols
@@ -620,6 +622,7 @@ async function toggleMic() {
             stopMic(false);
             if (clean) {
                 document.getElementById('txtMessage').value = clean;
+                if (!sessionid && !(await ensureSession())) return;
                 sendText();
             } else {
                 addBubble('bot', '[no speech recognized]');

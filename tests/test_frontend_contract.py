@@ -27,6 +27,12 @@ def test_avatar_frontend_contract():
     assert 'src="/api/avatar-idle/ditto_man?v=idle-1"' in html
     assert 'id="conversationView" class="main-layout" hidden' in html
     assert "function enterConversationAndTalk()" in html
+    landing_talk = html.split("async function enterConversationAndTalk()", 1)[1].split(
+        "async function enterConversationWithPrompt", 1
+    )[0]
+    assert "if (!sessionid) ensureSession()" in landing_talk
+    assert "await ensureSession()" not in landing_talk
+    assert "await toggleMic()" in landing_talk
     assert "function enterConversationWithPrompt(prompt)" in html
     assert "addBubble('user', prompt)" in html
     assert "await ensureSession()" in html
@@ -103,6 +109,12 @@ def test_avatar_frontend_contract():
     assert html.count('id="btnMic"') == 1
     assert 'onclick="sendText()"' not in html
     assert "function renderMicButton(listening)" in html
+    toggle_mic = html.split("async function toggleMic()", 1)[1].split(
+        "function stopMic", 1
+    )[0]
+    assert "Please connect WebRTC first" not in toggle_mic
+    assert "navigator.mediaDevices.getUserMedia({ audio: true })" in toggle_mic
+    assert "micWs.onmessage = async" in toggle_mic
     assert '<select id="txtType" class="visually-hidden"' in html
     assert ".chat-bubble { width: fit-content; max-width: 100%;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
