@@ -48,27 +48,6 @@
         }
         .card-header i { color: var(--primary); }
         .card-body { padding: 20px; }
-        .btn-primary-custom {
-            background: linear-gradient(135deg, #4361ee, #3f37c9);
-            border: none;
-            color: #fff;
-            font-weight: 600;
-            border-radius: 8px;
-            padding: 8px 16px;
-            cursor: pointer;
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-        .btn-primary-custom:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(67,97,238,0.3); color: #fff; }
-        .btn-primary-custom:active { transform: translateY(0); }
-        .btn-danger-custom { background: #ef4444; border: none; color: #fff; font-weight: 600; border-radius: 8px; padding: 8px 16px; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s; }
-        .btn-danger-custom:hover { transform: translateY(-1px); box-shadow: 0 4px 14px rgba(239,68,68,0.3); }
-        .btn-danger-custom:active { transform: translateY(0); }
-        .btn-outline-custom { border: 2px solid var(--primary); color: var(--primary); font-weight: 600; border-radius: 8px; padding: 8px 16px; background: transparent; cursor: pointer; transition: all 0.2s; }
-        .btn-outline-custom:hover { background: var(--primary); color: #fff; }
-        .btn-outline-custom:active { transform: scale(0.97); }
-        .btn-primary-custom, .btn-outline-custom, .btn-danger-custom { white-space: nowrap; }
-        .btn-sm.btn-primary-custom, .btn-sm.btn-outline-custom { padding: 5px 10px; font-size: 0.8rem; }
-        .btn-sm.btn-primary-custom i, .btn-sm.btn-outline-custom i { font-size: 0.8rem; }
         video { width: 100%; border-radius: 8px; background: #000; }
         .session-badge { font-size: 0.75rem; padding: 4px 10px; border-radius: 20px; }
         .connected { background: #d1fae5; color: #065f46; }
@@ -126,10 +105,6 @@
             box-shadow: none;
         }
         #avatarSelect:focus { box-shadow: none; }
-        #btnMic { flex: 0 0 42px; width: 42px; height: 42px; display: inline-flex; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 50%; background: #1597e5; color: #fff; font-size: 1.1rem; cursor: pointer; box-shadow: 0 3px 10px rgba(21,151,229,0.28); transition: background 0.2s, transform 0.2s, box-shadow 0.2s; }
-        #btnMic:hover { background: #087fc4; transform: translateY(-1px); }
-        #btnMic:active { transform: translateY(0); }
-        #btnMic.listening { background: #ef4444; box-shadow: 0 0 0 5px rgba(239,68,68,0.14); }
         .chat-pane .glass-card { flex: 1; min-height: 0; border: 0; border-radius: 0; box-shadow: none; margin: 0; overflow: hidden; background: #fff; }
         .chat-pane .card-body { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 0 16px 14px; background: #fff; }
         #chatResponse { flex: 1; height: auto !important; min-height: 0 !important; overflow-y: auto !important; overscroll-behavior: contain; border: 0 !important; background: #fff !important; }
@@ -151,7 +126,6 @@
             .avatar-selector { padding-top: 2px; padding-bottom: 2px; }
             .chat-pane .card-body { height: 100%; padding: 0 10px 8px; }
             .chat-composer { gap: 7px; padding: 8px 10px; }
-            .btn-danger-custom { padding-left: 10px; padding-right: 10px; }
         }
     </style>
     <style>
@@ -159,10 +133,17 @@
             --kiosk-ink: #172033;
             --kiosk-muted: #64748b;
             --kiosk-line: #d9e1ec;
-            --kiosk-canvas: #f7f9fc;
             --kiosk-brand: #3f63e8;
             --kiosk-brand-dark: #2746bd;
-            --kiosk-danger: #df3e48;
+            --kiosk-glow: #ff3ba7;
+            --kiosk-glow-soft: rgba(255, 59, 167, 0.42);
+            /* Chat pane stays white per spec; the kiosk reference only sets its layout. */
+            --chat-bg: #fff;
+            --chat-fg: var(--kiosk-ink);
+            --chat-muted: var(--kiosk-muted);
+            --chat-bubble-bot: #f1f3f7;
+            --chat-bubble-user: var(--kiosk-brand);
+            --chat-accent: var(--kiosk-brand);
         }
         * { box-sizing: border-box; }
         html, body { width: 100%; height: 100%; overflow: hidden; }
@@ -170,7 +151,8 @@
         button, select, textarea { font: inherit; }
         button { cursor: pointer; }
         button:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid rgba(63, 99, 232, 0.28); outline-offset: 2px; }
-        #app { position: relative; width: 100%; height: 100dvh; overflow: hidden; background: #fff; }
+        /* Row 2 is the full-width text strip; it collapses to nothing until opened. */
+        #app { position: relative; display: grid; grid-template-rows: minmax(0, 1fr) auto; width: 100%; height: 100dvh; overflow: hidden; background: #fff; }
         .view { position: absolute; inset: 0; min-width: 0; min-height: 0; }
         .view[hidden] { display: none !important; }
         .session-badge, #sessionIdDisplay { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -178,87 +160,91 @@
         #landingView { background: #111827; isolation: isolate; }
         #landingVideo { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 42%; background: #111827; }
         .landing-shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(8, 12, 20, 0.02) 25%, rgba(8, 12, 20, 0.2) 55%, rgba(8, 12, 20, 0.72) 100%); pointer-events: none; }
-        .landing-content { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 0 clamp(24px, 4vh, 44px); text-align: center; color: #fff; }
-        .landing-copy { width: min(760px, calc(100% - 32px)); margin: 0 auto 20px; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5); }
-        .landing-copy h1 { margin: 0; font-size: clamp(2rem, 3.6vw, 3.5rem); line-height: 1.08; letter-spacing: 0; font-weight: 760; }
-        .landing-copy p { margin: 8px 0 0; font-size: clamp(1rem, 1.5vw, 1.28rem); font-weight: 600; }
+        .landing-content { position: absolute; inset: 0; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; padding: 0 0 clamp(14px, 2vh, 24px); text-align: center; color: #fff; }
+        .landing-copy { width: min(1100px, calc(100% - 32px)); margin: 0 auto 26px; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.5); }
+        .landing-copy h1 { margin: 0; font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1.16; letter-spacing: 0; font-weight: 780; }
+        .landing-copy p { margin: 0; font-size: clamp(1.9rem, 3.2vw, 3rem); line-height: 1.16; font-weight: 780; }
         .landing-prompts { width: 100%; margin-bottom: 20px; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); }
         .prompt-row { width: 100%; overflow: hidden; }
         .prompt-row + .prompt-row { margin-top: 9px; }
         .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 20s linear infinite; }
         .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 22s; }
         .prompt-group { display: flex; flex: 0 0 auto; gap: 10px; padding-right: 10px; }
-        .prompt-chip { flex: 0 0 auto; min-height: 42px; padding: 9px 18px; border: 1px solid rgba(255, 255, 255, 0.32); border-radius: 999px; background: rgba(25, 31, 43, 0.62); color: #fff; font-size: 0.9rem; font-weight: 600; white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 5px 16px rgba(0, 0, 0, 0.2); }
-        .prompt-chip:hover { background: rgba(39, 49, 68, 0.88); border-color: rgba(255, 255, 255, 0.65); }
+        .prompt-chip { flex: 0 0 auto; min-height: 44px; padding: 9px 20px; border: 0; border-radius: 999px; background: rgba(88, 90, 96, 0.62); color: #fff; font-size: 1rem; font-weight: 500; white-space: nowrap; backdrop-filter: blur(10px); }
+        .prompt-chip:hover { background: rgba(118, 121, 128, 0.82); }
         @keyframes prompt-scroll { from { transform: translate3d(0, 0, 0); } to { transform: translate3d(-50%, 0, 0); } }
         @keyframes prompt-scroll-reverse { from { transform: translate3d(-50%, 0, 0); } to { transform: translate3d(0, 0, 0); } }
-        .landing-actions { display: flex; justify-content: center; }
-        .landing-talk { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-width: 238px; min-height: 56px; padding: 0 26px; border: 2px solid rgba(255,255,255,0.88); border-radius: 8px; background: rgba(12, 16, 24, 0.84); color: #fff; box-shadow: 0 10px 26px rgba(0,0,0,0.3); font-weight: 750; transition: background 160ms ease, transform 160ms ease; }
-        .landing-talk:hover { background: rgba(25, 33, 48, 0.98); transform: translateY(-1px); }
+        .landing-actions { display: flex; align-items: center; justify-content: center; gap: 20px; }
+        .landing-ask { min-width: 268px; min-height: 74px; padding: 0 34px; border: 3px solid var(--kiosk-glow); border-radius: 999px; background: #0a0a0a; color: #fff; font-size: 1.3rem; font-weight: 760; box-shadow: 0 0 20px var(--kiosk-glow-soft), 0 0 46px var(--kiosk-glow-soft); transition: box-shadow 160ms ease; }
+        .landing-ask:hover { box-shadow: 0 0 28px var(--kiosk-glow), 0 0 62px var(--kiosk-glow-soft); }
+        .landing-footer { margin-top: 16px; color: rgba(255, 255, 255, 0.86); font-size: 0.72rem; line-height: 1.3; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
+        .landing-footer strong { display: block; font-size: 1.2rem; font-weight: 760; letter-spacing: -0.01em; }
+        /* Round satellite button — flanks the primary pill on both the landing and the avatar stage. */
+        .round-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: rgba(60, 60, 64, 0.86); color: #fff; font-size: 1.2rem; backdrop-filter: blur(8px); transition: background 160ms ease; }
+        .round-button:hover { background: rgba(104, 106, 112, 0.94); }
+        .round-button.small { width: 46px; height: 46px; font-size: 1rem; }
+        .round-button.squared { border-radius: 14px; }
 
         #conversationView { background: #fff; }
         .main-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: 100%; height: 100%; min-height: 0; overflow: hidden; background: #fff; }
-        .avatar-pane { min-width: 0; min-height: 0; overflow: hidden; background: #0d1118; }
+        .avatar-pane { min-width: 0; min-height: 0; overflow: hidden; background: #000; }
         .avatar-stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
-        #video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; border-radius: 0; background: #111827 !important; }
-        .avatar-end-button { position: absolute; z-index: 4; left: 50%; bottom: 26px; transform: translateX(-50%); display: inline-flex; align-items: center; justify-content: center; gap: 12px; min-width: 188px; min-height: 52px; padding: 0 22px; border: 2px solid #ff5a43; border-radius: 8px; background: rgba(17, 20, 27, 0.88); color: #fff; font-weight: 760; box-shadow: 0 8px 22px rgba(0, 0, 0, 0.28); backdrop-filter: blur(8px); }
-        .avatar-end-button:hover { background: rgba(35, 39, 49, 0.96); }
-        .avatar-end-button i { color: #ff5a43; }
+        #video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; border-radius: 0; background: #000 !important; }
+        .avatar-voice-control { position: absolute; z-index: 4; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; }
         #offerError { position: absolute; z-index: 3; top: 18px; left: 18px; right: 18px; margin: 0; border-radius: 6px; }
-        .chat-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 1px solid var(--kiosk-line); background: #fff; }
-        .chat-toolbar { flex: 0 0 72px; padding: 0 22px; display: flex; align-items: center; border-bottom: 1px solid var(--kiosk-line); background: #fff; }
-        .chat-toolbar h2 { margin: 0; color: var(--kiosk-ink); font-size: 1rem; font-weight: 720; }
-        .chat-toolbar p { margin: 4px 0 0; color: var(--kiosk-muted); font-size: 0.78rem; }
-        .chat-card { display: flex; flex: 1; min-height: 0; flex-direction: column; }
-        #chatResponse { flex: 1; min-height: 0 !important; height: auto !important; overflow-y: auto !important; overscroll-behavior: contain; padding: 18px 20px; border: 0 !important; border-radius: 0; background: var(--kiosk-canvas) !important; }
-        .chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 16px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
-        .chat-user { margin-left: auto; background: var(--kiosk-brand); color: #fff; }
-        .chat-bot { position: relative; margin-right: auto; padding-bottom: 10px; background: #e9eef5; color: var(--kiosk-ink); }
+        .chat-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 0; background: var(--chat-bg); }
+        .chat-toolbar { flex: 0 0 96px; padding: 18px 14px 0 22px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 0; background: var(--chat-bg); }
+        .chat-brand { color: var(--chat-muted); font-size: 0.72rem; line-height: 1.3; text-align: left; }
+        .chat-brand strong { display: block; color: var(--chat-fg); font-size: 1.2rem; font-weight: 760; letter-spacing: -0.01em; }
+        .chat-toolbar-actions { display: inline-flex; align-items: center; gap: 10px; }
+        .conversation-exit { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--chat-muted); font-size: 1.2rem; }
+        .conversation-exit:hover { background: #f1f5f9; color: var(--kiosk-brand); }
+        #chatResponse { flex: 1; min-height: 0 !important; height: auto !important; overflow-y: auto !important; overscroll-behavior: contain; padding: 4px 22px 22px; border: 0 !important; border-radius: 0; background: var(--chat-bg) !important; }
+        .chat-bubble { position: relative; width: fit-content; max-width: 92%; margin: 0 0 16px; padding: 12px 16px; border-radius: 14px; font-size: 18px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
+        .chat-user { margin-left: auto; border-bottom-right-radius: 4px; background: var(--chat-bubble-user); color: #fff; }
+        .chat-bot { margin-right: auto; padding-bottom: 10px; background: var(--chat-bubble-bot); color: var(--chat-fg); }
+        /* Speech tail on the assistant bubble, matching the kiosk reference. */
+        .chat-bot::before { content: ''; position: absolute; left: -7px; bottom: 8px; width: 0; height: 0; border-right: 10px solid var(--chat-bubble-bot); border-top: 12px solid transparent; }
         .chat-bot .bubble-content { padding-right: 64px; }
         .chat-bot p:last-child { margin-bottom: 0; }
         .bubble-feedback { position: absolute; right: 9px; bottom: 5px; display: flex; gap: 2px; }
         .bubble-feedback[hidden] { display: none; }
-        .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #315ee8; font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
-        .feedback-button:hover { background: rgba(49, 94, 232, 0.11); transform: translateY(-1px); }
-        .feedback-button.selected { background: #315ee8; color: #fff; }
-        .chat-composer { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 14px 16px; border-top: 1px solid var(--kiosk-line); background: #fff; }
-        #txtMessage { flex: 1; min-width: 0; min-height: 44px; height: 44px; padding: 10px 14px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: var(--kiosk-ink); font-size: 16px; }
+        .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--chat-accent); font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
+        .feedback-button:hover { background: rgba(63, 99, 232, 0.11); transform: translateY(-1px); }
+        .feedback-button.selected { background: var(--chat-accent); color: #fff; }
+        /* Text mode and voice mode are exclusive: the strip and the avatar cluster swap. */
+        .chat-composer { position: relative; display: none; align-items: center; padding: 10px clamp(14px, 3vw, 40px); border-top: 1px solid var(--kiosk-line); background: #fff; }
+        #app.composer-open .chat-composer { display: flex; }
+        #app.composer-open .avatar-voice-control { display: none; }
+        #txtMessage { flex: 1; min-width: 0; min-height: 52px; height: 52px; padding: 13px 62px 13px 18px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: var(--chat-fg); font-size: 18px; }
         #txtMessage::placeholder { color: #94a3b8; }
-        #btnMic, .composer-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 7px; font-size: 1.05rem; }
-        #btnMic { border: 0; background: var(--kiosk-brand); color: #fff; }
-        #btnMic:hover { background: var(--kiosk-brand-dark); }
-        #btnMic.listening { background: var(--kiosk-danger); }
-        .btn-danger-custom { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 13px; border: 0; border-radius: 7px; background: var(--kiosk-danger); color: #fff; font-weight: 700; }
-        .btn-outline-custom { width: 44px; height: 44px; padding: 0; border: 1px solid #b8c5d9; border-radius: 7px; color: #52627b; background: #fff; }
-        .btn-danger-custom:hover { background: #c92f3a; }
-        .btn-outline-custom:hover { border-color: var(--kiosk-brand); color: var(--kiosk-brand); }
+        /* Sits inside the input's right edge; reveals the avatar voice cluster. */
+        .composer-mic { position: absolute; top: 50%; right: calc(clamp(14px, 3vw, 40px) + 7px); display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: #eef1f6; color: #3d4b60; font-size: 1rem; transform: translateY(-50%); }
+        .composer-mic:hover { background: #dee3ec; color: var(--kiosk-brand); }
 
-        .voice-control { flex: 0 0 auto; min-width: 176px; height: 46px; display: inline-flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 0 15px; border: 2px solid var(--kiosk-brand); border-radius: 999px; background: #172033; color: #fff; font-weight: 700; box-shadow: 0 5px 14px rgba(23, 32, 51, 0.2); transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease; }
-        #btnMic.voice-control { width: auto; min-width: 176px; height: 46px; padding: 0 15px; border: 2px solid var(--kiosk-brand); border-radius: 999px; background: #172033; }
-        #btnMic.voice-control:hover { background: #202b42; }
-        .voice-control.recording { border-color: #ff6b35; box-shadow: 0 0 18px rgba(255, 107, 53, 0.38); }
-        .voice-control.interrupting { border-color: #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.35); }
+        /* Rounded rectangle, not a pill — the ID selector keeps any legacy #btnMic rule from winning. */
+        #btnMic.voice-control { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: flex-start; gap: 13px; width: auto; min-width: 306px; height: 66px; padding: 0 24px 0 13px; border: 3px solid var(--kiosk-glow); border-radius: 18px; background: #0a0a0a; color: #fff; font-weight: 700; box-shadow: 0 0 18px var(--kiosk-glow-soft); transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease; }
+        #btnMic.voice-control:hover { background: #1c1c1e; }
+        .voice-control.recording { border-color: #ff8a3d; box-shadow: 0 0 20px rgba(255, 138, 61, 0.62); }
+        .voice-control.interrupting { border-color: #f59e0b; box-shadow: 0 0 20px rgba(245, 158, 11, 0.5); }
         .voice-control.processing { cursor: wait; border-color: #94a3b8; opacity: 0.82; box-shadow: none; }
-        .voice-control-icon { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; flex: 0 0 auto; }
-        .voice-control.recording .voice-control-icon { border-radius: 4px; background: #ff453a; }
+        .voice-control-icon { display: inline-flex; width: 38px; height: 38px; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: #3a3a3c; font-size: 1.05rem; }
+        .voice-control.recording .voice-control-icon { width: 26px; height: 26px; margin-left: 6px; border-radius: 6px; background: #ff453a; }
         .voice-control.recording .voice-control-icon i { display: none; }
-        .voice-control.interrupting .voice-control-icon { border: 3px solid #f59e0b; border-radius: 50%; }
-        .voice-control.interrupting .voice-control-icon::before { content: ''; width: 9px; height: 3px; border-radius: 2px; background: #f59e0b; transform: rotate(45deg); }
+        .voice-control.interrupting .voice-control-icon { width: 26px; height: 26px; margin-left: 6px; border: 3px solid #f59e0b; border-radius: 50%; background: transparent; }
+        .voice-control.interrupting .voice-control-icon::before { content: ''; width: 11px; height: 3px; border-radius: 2px; background: #f59e0b; transform: rotate(45deg); }
         .voice-control.interrupting .voice-control-icon i { display: none; }
-        .voice-bars { display: none; height: 24px; align-items: center; gap: 3px; }
+        .voice-bars { display: none; height: 22px; align-items: center; gap: 5px; }
         .voice-control.recording .voice-bars { display: flex; }
-        .voice-bar { width: 3px; height: 4px; max-height: 24px; border-radius: 2px; background: #ff6b35; transition: height 55ms linear; }
-        .voice-label { flex: 1; white-space: nowrap; text-align: left; }
+        .voice-bar { width: 5px; height: 5px; max-height: 22px; border-radius: 2px; background: #ff453a; transition: height 55ms linear; }
+        .voice-state { flex: 0 0 auto; color: rgba(255, 255, 255, 0.74); font-size: 0.6rem; font-weight: 600; line-height: 1.25; text-align: left; }
+        .voice-control.recording .voice-state, .voice-control.interrupting .voice-state { display: none; }
+        .voice-label { flex: 1; white-space: nowrap; text-align: center; font-size: 0.95rem; }
 
-        #avatarControl { position: absolute; z-index: 12; display: inline-flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.45); border-radius: 7px; background: rgba(15, 23, 42, 0.68); backdrop-filter: blur(10px); color: #fff; }
-        #avatarControl > i { font-size: 1rem; }
-        #avatarSelect { min-width: 158px; width: auto; padding: 0; border: 0; background: transparent; color: inherit; font-weight: 700; cursor: pointer; box-shadow: none; }
+        #avatarSelect { min-width: 132px; width: auto; padding: 0; border: 0; background: transparent; color: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; box-shadow: none; }
         #avatarSelect option { color: var(--kiosk-ink); background: #fff; }
-        #app:not(.conversation-active) #avatarControl { top: 20px; right: 20px; }
-        #app.conversation-active #avatarControl { top: 14px; left: calc(60% + 18px); right: auto; color: var(--kiosk-ink); border-color: transparent; background: transparent; backdrop-filter: none; }
 
-        .latency-row { display: flex; flex-wrap: wrap; gap: 5px 12px; margin-top: 12px; padding: 9px 68px 2px 0; border-top: 1px solid rgba(23, 32, 51, 0.13); color: #64748b; font-size: 0.72rem; }
-        .latency-row strong { color: #334155; font-variant-numeric: tabular-nums; }
+        .latency-row { display: none !important; }
         .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 4px; border: 0; border-radius: 5px; background: #080b12; }
         .chat-media-frame { aspect-ratio: 16 / 9; max-height: none; }
         .link-qr { display: block; width: fit-content; max-width: 100%; margin-top: 4px; padding: 0; border: 0; background: transparent; }
@@ -267,27 +253,30 @@
         @media (max-width: 900px) {
             .main-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 48%) minmax(0, 52%); }
             .chat-pane { border-top: 1px solid var(--kiosk-line); border-left: 0; }
-            .chat-toolbar { flex-basis: 56px; padding: 0 14px; }
-            #chatResponse { padding: 14px; }
-            .chat-composer { padding: 10px; }
-            #app.conversation-active #avatarControl { top: calc(48% + 10px); left: auto; right: 10px; }
-            .landing-content { padding-bottom: 18px; }
-            .landing-copy { margin-bottom: 14px; }
+            .chat-toolbar { flex-basis: 70px; padding: 12px 8px 0 14px; }
+            .chat-brand strong { font-size: 1.02rem; }
+            #chatResponse { padding: 4px 14px 14px; }
+            .chat-composer { padding: 10px 14px 12px; }
+            .landing-content { padding-bottom: 14px; }
+            .landing-copy { margin-bottom: 16px; }
             .landing-prompts { margin-bottom: 14px; }
-            .prompt-chip { min-height: 38px; padding: 7px 14px; font-size: 0.82rem; }
+            .prompt-chip { min-height: 40px; padding: 8px 16px; font-size: 0.94rem; }
+            .landing-ask { min-width: 214px; min-height: 62px; font-size: 1.1rem; }
+            .round-button { width: 48px; height: 48px; }
         }
         @media (max-width: 560px) {
-            .landing-content { padding: 20px; }
-            .landing-copy h1 { font-size: 2rem; }
-            .landing-talk { min-width: 190px; }
-            #avatarControl { top: 12px !important; right: 12px !important; left: auto !important; }
-            #avatarSelect { min-width: 130px; }
-            .btn-danger-custom span { display: none; }
-            .chat-bubble { font-size: 16px; }
+            .landing-content { padding: 0 12px 12px; }
+            .landing-copy h1 { font-size: 1.6rem; }
+            .landing-actions { gap: 12px; }
+            .landing-ask { min-width: 168px; min-height: 56px; padding: 0 20px; font-size: 1rem; }
+            .round-button { width: 44px; height: 44px; }
+            #avatarSelect { min-width: 108px; }
+            .voice-control { min-width: 210px; height: 54px; padding: 0 16px; }
+            .voice-state { display: none; }
         }
         @media (prefers-reduced-motion: reduce) {
             .prompt-track { animation-play-state: paused; }
-            .landing-talk, .prompt-chip, .feedback-button { transition: none; }
+            .landing-ask, .round-button, .prompt-chip, .feedback-button { transition: none; }
         }
 
         #conversationView[hidden] { display: none !important; }
@@ -297,16 +286,34 @@
         #conversationView .avatar-stage { flex: 1; }
         #conversationView .avatar-pane .mt-3 { margin-top: 0 !important; }
         #conversationView .chat-pane .glass-card { display: flex; flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
-        #conversationView .chat-pane .card-body { display: flex; flex: 1; min-height: 0; padding: 0 16px 82px; }
+        #conversationView .chat-pane .card-body { display: flex; flex: 1; min-height: 0; padding: 0; background: #fff; }
         #conversationView .chat-toolbar { justify-content: space-between; }
         #conversationView .avatar-selector { display: inline-flex; align-items: center; gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--kiosk-ink); box-shadow: none; }
         #conversationView .avatar-selector > i { color: var(--kiosk-brand); }
-        #conversationView #avatarSelect { min-width: 158px; color: var(--kiosk-ink); }
-        #app > .chat-composer { display: none; position: absolute; z-index: 8; left: 60%; right: 0; bottom: 0; }
-        #app.conversation-active > .chat-composer { display: flex; }
+        #conversationView #avatarSelect { color: var(--kiosk-ink); }
+
+        .end-session-backdrop { position: absolute; z-index: 40; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, 0.52); }
+        .end-session-backdrop[hidden] { display: none; }
+        .end-session-dialog { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: min(420px, 100%); aspect-ratio: 4 / 3; padding: 26px 30px; border: 0; border-radius: 8px; background: #303030; color: #fff; text-align: center; box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42); }
+        .end-session-dialog h2 { margin: 0; font-size: 1.5rem; font-weight: 760; }
+        .end-session-dialog p { margin: 0; font-size: 1rem; line-height: 1.45; font-weight: 500; }
+        .end-session-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; }
+        .end-session-actions button { min-height: 44px; padding: 0 18px; border-radius: 6px; font-weight: 720; }
+        /* The info panel carries prose, so it opts out of the 4:3 confirm-dialog box. */
+        .info-dialog { width: min(620px, 100%); aspect-ratio: auto; max-height: calc(100dvh - 48px); padding: 30px 34px; gap: 14px; align-items: stretch; overflow-y: auto; text-align: left; }
+        .info-dialog h2 { font-size: 1.35rem; }
+        .info-dialog p { font-size: 0.98rem; }
+        .info-dialog ul { margin: 0; padding-left: 20px; font-size: 0.98rem; line-height: 1.55; }
+        .info-dialog li + li { margin-top: 5px; }
+        .info-dialog .info-footer { color: rgba(255, 255, 255, 0.74); }
+        .info-dialog a { color: #a8c4ff; }
+        .info-dialog .end-session-actions { justify-content: flex-end; margin-top: 4px; }
+        .end-session-continue { border: 1px solid #f8fafc; background: #f8fafc; color: #1f2937; }
+        .end-session-confirm { border: 1px solid #ff6b63; background: transparent; color: #fff; }
+        .end-session-confirm:hover { background: #4a2525; }
         @media (max-width: 900px) {
-            #conversationView .chat-pane .card-body { padding-bottom: 70px; }
-            #app > .chat-composer { left: 0; }
+            .avatar-voice-control { bottom: 12px; gap: 8px; }
+            .voice-control { min-width: 224px; height: 54px; padding: 0 18px; }
         }
     </style>
 </head>
@@ -358,13 +365,43 @@
                 </div>
             </div>
             <div class="landing-actions">
-                <button class="landing-talk" type="button" onclick="enterConversationAndTalk()">
+                <button class="round-button" type="button" onclick="openInfoDialog()" title="About this assistant" aria-label="About this assistant">
+                    <i class="bi bi-info-lg" aria-hidden="true"></i>
+                </button>
+                <button class="landing-ask" type="button" onclick="enterConversationAndType()">Ask a Question</button>
+                <button class="round-button" type="button" onclick="enterConversationAndTalk()" title="Press to Talk" aria-label="Press to Talk">
                     <i class="bi bi-mic-fill" aria-hidden="true"></i>
-                    Press to Talk
                 </button>
             </div>
+            <div class="landing-footer">Powered by <strong>voncierge</strong></div>
         </div>
     </section>
+    <div id="endSessionDialog" class="end-session-backdrop" hidden>
+        <section class="end-session-dialog" role="dialog" aria-modal="true" aria-labelledby="endSessionTitle" aria-describedby="endSessionMessage">
+            <h2 id="endSessionTitle">Are you sure you want to leave?</h2>
+            <p id="endSessionMessage">If you end this session, our conversation will be cleared and I won’t remember what we talked about.</p>
+            <div class="end-session-actions">
+                <button class="end-session-continue" type="button" onclick="closeEndSessionDialog()">Continue Chatting</button>
+                <button class="end-session-confirm" type="button" onclick="endConversation()">End Session</button>
+            </div>
+        </section>
+    </div>
+    <div id="infoDialog" class="end-session-backdrop" hidden>
+        <section class="end-session-dialog info-dialog" role="dialog" aria-modal="true" aria-labelledby="infoDialogTitle">
+            <h2 id="infoDialogTitle">Digital Dental Health Avatar</h2>
+            <p>Developed by Voncierge in collaboration with the Health Promotion Board (HPB), this Digital Dental Health Avatar makes oral health education more interactive and accessible for students.</p>
+            <ul>
+                <li>Ask questions naturally through voice or text</li>
+                <li>Learn about brushing, flossing, diet, preventive and post-treatment care</li>
+                <li>Receive answers grounded in HPB-approved oral health information</li>
+                <li>Get directed to dental staff when further assistance is needed</li>
+            </ul>
+            <p class="info-footer">Powered by Voncierge<br><a href="https://voncierge.ai/" target="_blank" rel="noopener">https://voncierge.ai/</a></p>
+            <div class="end-session-actions">
+                <button class="end-session-continue" type="button" onclick="closeInfoDialog()">Got it</button>
+            </div>
+        </section>
+    </div>
     <!-- Quick Links -->
     <div class="row g-3 mb-2 d-none">
         <div class="col-md-3">
@@ -406,10 +443,23 @@
                     <div id="offerError" class="alert alert-danger mt-3" role="alert" style="display:none;"></div>
                     <div class="mt-3 avatar-stage">
                         <video id="video" autoplay playsinline muted></video>
-                        <button class="avatar-end-button" type="button" onclick="endConversation()" title="End conversation and return home">
-                            <i class="bi bi-stop-fill" aria-hidden="true"></i>
-                            End
-                        </button>
+                        <div class="avatar-voice-control">
+                            <button class="round-button small" type="button" onclick="openInfoDialog()" title="About this assistant" aria-label="About this assistant">
+                                <i class="bi bi-info-lg" aria-hidden="true"></i>
+                            </button>
+                            <button id="btnMic" class="voice-control" type="button" onclick="handleVoiceControl()" title="Press to speak" aria-label="Press to speak" aria-pressed="false">
+                                <span class="voice-control-icon" aria-hidden="true"><i class="bi bi-mic-fill"></i></span>
+                                <span class="voice-state" aria-hidden="true">Microphone<br>Off</span>
+                                <span class="voice-bars" aria-hidden="true">
+                                    <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
+                                    <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
+                                </span>
+                                <span class="voice-label">Press to Speak</span>
+                            </button>
+                            <button class="round-button small squared" type="button" onclick="openComposer()" title="Switch to keyboard" aria-label="Switch to keyboard">
+                                <i class="bi bi-keyboard-fill" aria-hidden="true"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -418,14 +468,16 @@
         <!-- Right Column: Drivers + Actions -->
         <div class="chat-pane">
             <div class="chat-toolbar">
-                <div class="chat-title">
-                    <h2>Conversation</h2>
-                    <p>Ask anything about your health and wellbeing.</p>
-                </div>
-                <div class="avatar-selector">
-                    <i class="bi bi-person-video3" aria-hidden="true"></i>
-                    <label class="visually-hidden" for="avatarSelect">Select avatar</label>
-                    <select id="avatarSelect" onchange="switchAvatar()" class="form-select form-select-sm" title="Switch avatar"></select>
+                <div class="chat-brand">Powered by <strong>voncierge</strong></div>
+                <div class="chat-toolbar-actions">
+                    <div class="avatar-selector">
+                        <i class="bi bi-person-video3" aria-hidden="true"></i>
+                        <label class="visually-hidden" for="avatarSelect">Select avatar</label>
+                        <select id="avatarSelect" onchange="switchAvatar()" class="form-select form-select-sm" title="Switch avatar"></select>
+                    </div>
+                    <button class="conversation-exit" type="button" onclick="openEndSessionDialog()" title="Exit conversation" aria-label="Exit conversation">
+                        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                    </button>
                 </div>
             </div>
             <!-- 2. Text Driver -->
@@ -434,23 +486,14 @@
                     <option value="chat">Chat</option>
                 </select>
                 <div class="card-body">
-                    <div id="chatResponse" style="height:calc(100vh - 420px); min-height:400px; overflow-y:auto; padding:12px; background:rgba(255,255,255,0.6); border:1px solid rgba(0,0,0,0.08); border-radius:8px; display:flex; flex-direction:column;"></div>
+                    <div id="chatResponse"></div>
                 </div>
             </div>
-
         </div>
     </div>
     <div class="chat-composer">
-        <textarea class="form-control form-control-sm" id="txtMessage" rows="1" placeholder="Enter a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
-        <button id="btnMic" class="voice-control" type="button" onclick="handleVoiceControl()" title="Press to speak" aria-label="Press to speak" aria-pressed="false">
-            <span class="voice-control-icon" aria-hidden="true"><i class="bi bi-mic-fill"></i></span>
-            <span class="voice-bars" aria-hidden="true">
-                <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
-                <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
-            </span>
-            <span class="voice-label">Press to Speak</span>
-        </button>
-        <button class="btn-outline-custom btn-sm" onclick="document.getElementById('chatResponse').innerHTML=''" title="Clear chat"><i class="bi bi-trash"></i></button>
+        <textarea class="form-control form-control-sm" id="txtMessage" rows="1" placeholder="Type your message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
+        <button class="composer-mic" type="button" onclick="startVoiceMode()" title="Speak instead" aria-label="Speak instead"><i class="bi bi-mic-fill" aria-hidden="true"></i></button>
     </div>
 </div>
 
@@ -526,7 +569,8 @@ function enterConversation() {
     sessionEnded = false;
     updateLandingSource();
     const app = document.getElementById('app');
-    app.classList.add('conversation-active');
+    // Text input is the default mode on entry; the keyboard button hides it.
+    app.classList.add('conversation-active', 'composer-open');
     document.getElementById('landingView').hidden = true;
     document.getElementById('conversationView').hidden = false;
     document.getElementById('video').play().catch(() => {});
@@ -541,10 +585,41 @@ function ensureSession() {
 
 async function enterConversationAndTalk() {
     enterConversation();
+    await startVoiceMode();
+}
+
+// "Ask a Question" — same session bootstrap as the mic, minus the capture.
+function enterConversationAndType() {
+    enterConversation();
     unlockOutputAudio();
-    // ASR does not depend on the avatar session. Start both in parallel so a
-    // cold Ditto/WebRTC initialization never blocks microphone capture.
     if (!sessionid) ensureSession();
+    openComposer();
+}
+
+function openInfoDialog() {
+    const dialog = document.getElementById('infoDialog');
+    dialog.hidden = false;
+    dialog.querySelector('.end-session-continue').focus();
+}
+
+function closeInfoDialog() {
+    document.getElementById('infoDialog').hidden = true;
+}
+
+// Text mode: the strip replaces the avatar's voice cluster. A capture in progress
+// is dropped — the user chose to type instead.
+function openComposer() {
+    if (micOn) stopMic(false);
+    document.getElementById('app').classList.add('composer-open');
+    document.getElementById('txtMessage').focus();
+}
+
+// Voice mode: hide the strip, reveal the cluster under the avatar, and start
+// capturing right away — pressing the mic IS the press-to-speak. toggleMic()
+// unlocks audio and kicks off a cold session without awaiting it, so Ditto
+// warming up never blocks the microphone.
+async function startVoiceMode() {
+    document.getElementById('app').classList.remove('composer-open');
     if (!micOn) await toggleMic();
 }
 
@@ -556,12 +631,26 @@ async function enterConversationWithPrompt(prompt) {
     await sendText(prompt, false);
 }
 
-async function endConversation() {
+function openEndSessionDialog() {
+    const dialog = document.getElementById('endSessionDialog');
+    dialog.hidden = false;
+    dialog.querySelector('.end-session-continue').focus();
+}
+
+function closeEndSessionDialog() {
+    document.getElementById('endSessionDialog').hidden = true;
+    document.querySelector('.conversation-exit')?.focus();
+}
+
+function endConversation() {
+    closeEndSessionDialog();
     stopMic(false);
-    await interrupt();
+    interrupt();
     latencyTurn++;
     speakGen++;
     speakQueue = Promise.resolve();
+    avatarSpeaking = false;
+    renderMicButton();
     const video = document.getElementById('video');
     video.muted = true;
     outputAudioUnlocked = false;
@@ -569,7 +658,7 @@ async function endConversation() {
     document.getElementById('txtMessage').value = '';
     document.getElementById('offerError').style.display = 'none';
     const app = document.getElementById('app');
-    app.classList.remove('conversation-active');
+    app.classList.remove('conversation-active', 'composer-open');
     document.getElementById('conversationView').hidden = true;
     document.getElementById('landingView').hidden = false;
     updateLandingSource();
@@ -577,6 +666,12 @@ async function endConversation() {
     landingVideo.currentTime = 0;
     landingVideo.play().catch(() => {});
 }
+
+document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    if (!document.getElementById('endSessionDialog').hidden) closeEndSessionDialog();
+    if (!document.getElementById('infoDialog').hidden) closeInfoDialog();
+});
 
 // --- Voice input (browser SpeechRecognition, matching avatar_ui) ---
 let speechRecognition = null, speechFinalText = '', speechInterimText = '';
@@ -610,11 +705,12 @@ function drawVoiceBars() {
 function renderMicButton() {
     const btn = document.getElementById('btnMic');
     const mode = avatarSpeaking ? 'interrupt' : (micOn ? 'recording' : (micProcessing ? 'processing' : 'idle'));
-    const label = mode === 'interrupt' ? 'Interrupt' : (mode === 'recording' ? 'End' : (mode === 'processing' ? 'Processing...' : 'Press to Speak'));
+    const label = mode === 'interrupt' ? 'Interrupt' : (mode === 'recording' ? 'Press to Stop Recording' : (mode === 'processing' ? 'Processing...' : 'Press to Speak'));
     btn.classList.toggle('recording', mode === 'recording');
     btn.classList.toggle('interrupting', mode === 'interrupt');
     btn.classList.toggle('processing', mode === 'processing');
     btn.disabled = mode === 'processing';
+    btn.querySelector('.voice-state').innerHTML = 'Microphone<br>' + (micOn ? 'On' : 'Off');
     btn.querySelector('.voice-label').textContent = label;
     btn.title = label;
     btn.setAttribute('aria-label', label);

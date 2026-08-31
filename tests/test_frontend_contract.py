@@ -28,12 +28,15 @@ def test_avatar_frontend_contract():
     assert 'src="/api/avatar-idle/ditto_man?v=idle-1"' in html
     assert 'id="conversationView" class="main-layout" hidden' in html
     assert "function enterConversationAndTalk()" in html
-    landing_talk = html.split("async function enterConversationAndTalk()", 1)[1].split(
-        "async function enterConversationWithPrompt", 1
-    )[0]
-    assert "if (!sessionid) ensureSession()" in landing_talk
+    # A cold Ditto session must never block microphone capture: no awaited
+    # ensureSession() anywhere on the path from a mic press to toggleMic().
+    landing_talk = html.split("async function enterConversationAndTalk()", 1)[1].split("\n}", 1)[0]
     assert "await ensureSession()" not in landing_talk
-    assert "await toggleMic()" in landing_talk
+    assert "await startVoiceMode()" in landing_talk
+    voice_mode = html.split("async function startVoiceMode()", 1)[1].split("\n}", 1)[0]
+    assert "await ensureSession()" not in voice_mode
+    assert "await toggleMic()" in voice_mode
+    assert "classList.remove('composer-open')" in voice_mode
     assert "function enterConversationWithPrompt(prompt)" in html
     assert "addBubble('user', prompt)" in html
     assert "await ensureSession()" in html
@@ -54,14 +57,26 @@ def test_avatar_frontend_contract():
     assert "Press to Talk" in html
     assert 'class="landing-prompts"' in html
     assert html.count('class="prompt-track"') == 2
-    assert 'class="avatar-end-button"' in html
+    assert 'class="avatar-end-button"' not in html
+    assert 'class="avatar-voice-control"' in html
+    assert 'class="conversation-exit"' in html
+    assert 'onclick="openEndSessionDialog()" title="Exit conversation"' in html
+    assert 'id="endSessionDialog"' in html
+    assert 'Are you sure you want to leave?' in html
+    assert 'Continue Chatting' in html
+    assert 'End Session' in html
+    assert "function openEndSessionDialog()" in html
+    assert "function closeEndSessionDialog()" in html
     assert "document.getElementById('chatResponse').replaceChildren()" in html
     assert "document.getElementById('landingView').hidden = false" in html
-    end_conversation = html.split("async function endConversation()", 1)[1].split("// --- Voice input", 1)[0]
+    end_conversation = html.split("function endConversation()", 1)[1].split("// --- Voice input", 1)[0]
+    assert "interrupt()" in end_conversation
+    assert "pc.close()" not in end_conversation
+    assert "setSessionId(null)" not in end_conversation
     assert "peer.close()" not in end_conversation
     assert "setSessionId(null)" not in end_conversation
     assert "video.srcObject = null" not in end_conversation
-    assert "await interrupt()" in end_conversation
+    assert "await interrupt()" not in end_conversation
     assert "if (sessionEnded || reconnectTimer) return" in html
     assert "className = 'bubble-feedback'" in html
     assert ".bubble-feedback { position: absolute; right: 9px; bottom: 5px;" in html
@@ -76,6 +91,7 @@ def test_avatar_frontend_contract():
     assert "function ensureSession()" in html
     assert "sessionWaiters.push(resolve)" in html
     assert "row.hidden = true" in html
+    assert ".latency-row { display: none !important; }" in html
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
     assert (
@@ -100,17 +116,74 @@ def test_avatar_frontend_contract():
     assert "overflow: hidden;" in html
     assert "height: 100dvh" in html
     assert "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)" in html
-    assert ".chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 16px;" in html
-    assert "color: var(--kiosk-ink); font-size: 16px;" in html
+    assert "font-size: 18px" in html
+    assert "color: var(--chat-fg); font-size: 18px;" in html
+    assert "font-size: 16px" not in html.split("#conversationView { background: #fff; }", 1)[1]
+    # Right pane stays white; the kiosk reference contributes layout only.
+    assert "--chat-bg: #fff;" in html
+    assert "background: var(--chat-bg) !important" in html
+    assert "--chat-bubble-bot: #f1f3f7;" in html
+    # Landing action cluster: info / Ask a Question / mic, per the reference screens.
+    landing = html.split('class="landing-actions"', 1)[1].split("</section>", 1)[0]
+    assert landing.count('class="round-button"') == 2
+    assert 'class="landing-ask"' in landing
+    assert 'onclick="enterConversationAndType()"' in landing
+    assert 'onclick="enterConversationAndTalk()"' in landing
+    assert 'class="landing-talk"' not in html
+    assert "function enterConversationAndType()" in html
+    assert "function openInfoDialog()" in html
+    assert 'id="infoDialog"' in html
+    assert 'class="chat-brand"' in html
     assert "#conversationView[hidden] { display: none !important; }" in html
-    assert "#app.conversation-active > .chat-composer { display: flex; }" in html
+    # Text input is a full-width strip in the app's second grid row, opened on demand.
+    assert "grid-template-rows: minmax(0, 1fr) auto" in html
+    assert "#app.composer-open .chat-composer { display: flex; }" in html
+    assert "function openComposer()" in html
+    # Entering the conversation defaults to text input.
+    assert "app.classList.add('conversation-active', 'composer-open')" in html
+    assert "app.classList.remove('conversation-active', 'composer-open')" in html
+    assert "#avatarControl" not in html
+    # The stage control is a rounded rectangle; the legacy round blue #btnMic is gone.
+    assert "#btnMic.voice-control { flex: 0 0 auto;" in html
+    assert "border-radius: 18px" in html
+    assert "background: #1597e5" not in html
+    assert "#btnMic.listening" not in html
+    assert "Press to Stop Recording" in html
+    assert "voice-control-icon { display: inline-flex; width: 38px; height: 38px;" in html
+    # Info panel copy is the HPB/Voncierge briefing, not a generic how-to.
+    assert "Health Promotion Board (HPB)" in html
+    assert "Receive answers grounded in HPB-approved oral health information" in html
+    assert "https://voncierge.ai/" in html
+    assert 'class="end-session-dialog info-dialog"' in html
+    assert ".info-dialog { width: min(620px, 100%); aspect-ratio: auto;" in html
     assert html.index('class="chat-toolbar"') < html.index('id="chatResponse"')
     assert html.index('id="chatResponse"') < html.index('class="chat-composer"')
+    assert html.index('class="chat-composer"') < html.index("<script>")
+    assert "aspect-ratio: 4 / 3" in html
+    assert ".end-session-actions { display: flex; flex-wrap: wrap; justify-content: center;" in html
     assert "#chatResponse { flex: 1;" in html
     assert "overflow-y: auto !important" in html
+    assert "background: #fff !important" in html
     assert 'id="btnMic" class="voice-control" type="button" onclick="handleVoiceControl()"' in html
     assert html.count('id="btnMic"') == 1
-    assert 'onclick="sendText()"' not in html
+    avatar_stage = html.split('class="mt-3 avatar-stage"', 1)[1].split('<div class="chat-pane"', 1)[0]
+    composer = html.split('<div class="chat-composer">', 1)[1].split('</div>', 1)[0]
+    assert 'id="btnMic"' in avatar_stage
+    # Strip is the textarea plus the mic that switches to voice mode. No send, no clear.
+    assert 'id="btnMic"' not in composer
+    assert 'id="txtMessage"' in composer
+    assert "sendText()" in composer          # Enter key handler
+    assert composer.count("<button") == 1
+    assert 'class="composer-mic"' in composer
+    assert 'onclick="startVoiceMode()"' in composer
+    assert "bi-trash" not in html
+    assert "composer-send" not in html
+    assert 'class="btn-outline-custom' not in html
+    # Text mode and voice mode are exclusive.
+    assert "#app.composer-open .avatar-voice-control { display: none; }" in html
+    assert "async function startVoiceMode()" in html
+    assert "bi-keyboard-fill" in avatar_stage
+    assert 'onclick="openComposer()"' in avatar_stage
     assert "function renderMicButton()" in html
     assert "function drawVoiceBars()" in html
     assert "function stopVoiceVisualization()" in html
@@ -137,7 +210,7 @@ def test_avatar_frontend_contract():
     assert "autoGainControl: true" in toggle_mic
     assert "'/api/asr'" not in html
     assert '<select id="txtType" class="visually-hidden"' in html
-    assert ".chat-bubble { width: fit-content; max-width: 100%;" in html
+    assert ".chat-bubble { position: relative; width: fit-content;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
     assert "if (pc !== peer) return;" in html
     assert "scheduleReconnect(5000)" in html
