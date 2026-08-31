@@ -71,6 +71,7 @@ def test_avatar_frontend_contract():
     assert "document.getElementById('landingView').hidden = false" in html
     end_conversation = html.split("function endConversation()", 1)[1].split("// --- Voice input", 1)[0]
     assert "interrupt()" in end_conversation
+    assert "chatSessionId = createChatSessionId();" in end_conversation
     assert "pc.close()" not in end_conversation
     assert "setSessionId(null)" not in end_conversation
     assert "peer.close()" not in end_conversation
@@ -88,8 +89,20 @@ def test_avatar_frontend_contract():
     assert "bi-hand-thumbs-up-fill" in html
     assert "bi-hand-thumbs-down-fill" in html
     assert "loadAvatarList().finally(() => start())" in html
+    # Agent chat streams independently from the expensive WebRTC avatar build.
+    assert "let chatSessionId = createChatSessionId();" in html
+    assert "function createChatSessionId()" in html
     assert "function ensureSession()" in html
-    assert "sessionWaiters.push(resolve)" in html
+    assert "return new Promise(resolve => sessionWaiters.push(resolve));" in html
+    prompt_flow = html.split("async function enterConversationWithPrompt(prompt)", 1)[1].split("\n}", 1)[0]
+    assert "await ensureSession()" not in prompt_flow
+    send_text = html.split("async function sendText(textOverride = null, showUserBubble = true)", 1)[1].split("// --- Interrupt", 1)[0]
+    assert "ensureSession();" in send_text
+    assert "await ensureSession()" not in send_text
+    assert "session_id: chatSessionId" in send_text
+    queue_speak = html.split("function queueSpeak(text, doInterrupt, pauseMs = 520, final = true)", 1)[1].split("// Where to cut", 1)[0]
+    assert "await ensureSession();" in queue_speak
+    assert "if (gen !== speakGen || !sessionid) return;" in queue_speak
     assert "row.hidden = true" in html
     assert ".latency-row { display: none !important; }" in html
     assert "el.parentElement.hidden = false" in html
@@ -191,8 +204,10 @@ def test_avatar_frontend_contract():
     assert html.count('class="voice-bar"') == 12
     assert "async function handleVoiceControl()" in html
     assert "micProcessing = false" in html
+    assert "micStarting = false" in html
     assert "Processing..." in html
-    assert "btn.disabled = mode === 'processing'" in html
+    assert "Starting microphone..." in html
+    assert "btn.disabled = mode === 'processing' || mode === 'starting'" in html
     assert "if (avatarSpeaking)" in html
     assert "setInterval(syncAvatarSpeaking, 250)" in html
     assert "micSource.connect(micAnalyser)" in html
@@ -201,6 +216,8 @@ def test_avatar_frontend_contract():
     )[0]
     assert "Please connect WebRTC first" not in toggle_mic
     assert "window.SpeechRecognition || window.webkitSpeechRecognition" in toggle_mic
+    assert "if (micStarting) return;" in toggle_mic
+    assert "micStarting = true;" in toggle_mic
     assert "recognition.continuous = true" in toggle_mic
     assert "recognition.interimResults = true" in toggle_mic
     assert "recognition.lang = 'en-US'" in toggle_mic

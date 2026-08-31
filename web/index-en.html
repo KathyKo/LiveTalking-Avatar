@@ -506,6 +506,14 @@ let connecting = false;
 let reconnectTimer = null;
 let sessionEnded = false;
 let sessionWaiters = [];
+let chatSessionId = createChatSessionId();
+
+function createChatSessionId() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    return 'chat-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+}
 
 function updateStatus(connected) {
     const badge = document.getElementById('statusBadge');
@@ -576,6 +584,8 @@ function enterConversation() {
     document.getElementById('video').play().catch(() => {});
 }
 
+// Agent chat must not wait on the expensive Ditto/WebRTC setup. Only queued
+// avatar speech awaits this promise, so a cold avatar cannot drop a question.
 function ensureSession() {
     if (sessionid) return Promise.resolve(true);
     sessionEnded = false;
@@ -620,14 +630,13 @@ function openComposer() {
 // warming up never blocks the microphone.
 async function startVoiceMode() {
     document.getElementById('app').classList.remove('composer-open');
-    if (!micOn) await toggleMic();
+    if (!micOn && !micStarting) await toggleMic();
 }
 
 async function enterConversationWithPrompt(prompt) {
     enterConversation();
     unlockOutputAudio();
     addBubble('user', prompt);
-    if (!sessionid && !(await ensureSession())) return;
     await sendText(prompt, false);
 }
 
@@ -656,6 +665,7 @@ function endConversation() {
     outputAudioUnlocked = false;
     document.getElementById('chatResponse').replaceChildren();
     document.getElementById('txtMessage').value = '';
+    chatSessionId = createChatSessionId();
     document.getElementById('offerError').style.display = 'none';
     const app = document.getElementById('app');
     app.classList.remove('conversation-active', 'composer-open');
@@ -676,7 +686,8 @@ document.addEventListener('keydown', event => {
 // --- Voice input (browser SpeechRecognition, matching avatar_ui) ---
 let speechRecognition = null, speechFinalText = '', speechInterimText = '';
 let micCtx = null, micStream = null, micSource = null;
-let micAnalyser = null, micVisualFrame = null, micOn = false, micProcessing = false, avatarSpeaking = false;
+let micAnalyser = null, micVisualFrame = null, micOn = false, micStarting = false, micProcessing = false, avatarSpeaking = false;
+let micStartGeneration = 0;
 
 function resetVoiceBars() {
     document.querySelectorAll('.voice-bar').forEach(bar => { bar.style.height = '4px'; });
@@ -704,22 +715,22 @@ function drawVoiceBars() {
 
 function renderMicButton() {
     const btn = document.getElementById('btnMic');
-    const mode = avatarSpeaking ? 'interrupt' : (micOn ? 'recording' : (micProcessing ? 'processing' : 'idle'));
-    const label = mode === 'interrupt' ? 'Interrupt' : (mode === 'recording' ? 'Press to Stop Recording' : (mode === 'processing' ? 'Processing...' : 'Press to Speak'));
+    const mode = avatarSpeaking ? 'interrupt' : (micOn ? 'recording' : (micStarting ? 'starting' : (micProcessing ? 'processing' : 'idle')));
+    const label = mode === 'interrupt' ? 'Interrupt' : (mode === 'recording' ? 'Press to Stop Recording' : (mode === 'starting' ? 'Starting microphone...' : (mode === 'processing' ? 'Processing...' : 'Press to Speak')));
     btn.classList.toggle('recording', mode === 'recording');
     btn.classList.toggle('interrupting', mode === 'interrupt');
     btn.classList.toggle('processing', mode === 'processing');
-    btn.disabled = mode === 'processing';
-    btn.querySelector('.voice-state').innerHTML = 'Microphone<br>' + (micOn ? 'On' : 'Off');
+    btn.disabled = mode === 'processing' || mode === 'starting';
+    btn.querySelector('.voice-state').innerHTML = 'Microphone<br>' + (micOn ? 'On' : (micStarting ? 'Starting' : 'Off'));
     btn.querySelector('.voice-label').textContent = label;
     btn.title = label;
     btn.setAttribute('aria-label', label);
     btn.setAttribute('aria-pressed', String(mode !== 'idle'));
-    btn.setAttribute('aria-busy', String(mode === 'processing'));
+    btn.setAttribute('aria-busy', String(mode === 'processing' || mode === 'starting'));
 }
 
 async function handleVoiceControl() {
-    if (micProcessing) return;
+    if (micProcessing || micStarting) return;
     if (avatarSpeaking) {
         await interrupt();
         avatarSpeaking = false;
@@ -733,6 +744,7 @@ async function handleVoiceControl() {
 async function toggleMic() {
     unlockOutputAudio();   // this click is a user gesture — unlock avatar audio playback now
     if (micOn) { stopMic(true); return; }
+    if (micStarting) return;
     if (sessionid) interrupt();
     else ensureSession();
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -740,12 +752,27 @@ async function toggleMic() {
         alert('Browser speech recognition is not supported. Please use Chrome or Edge.');
         return;
     }
+    const startGeneration = ++micStartGeneration;
+    micStarting = true;
+    renderMicButton();
     try {
         micStream = await navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
         });
-    } catch (e) { return alert('Microphone permission denied'); }
+    } catch (e) {
+        if (startGeneration === micStartGeneration) {
+            micStarting = false;
+            renderMicButton();
+        }
+        return alert('Microphone permission denied');
+    }
+    if (startGeneration !== micStartGeneration) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+        return;
+    }
 
+    micStarting = false;
     micOn = true;
     micProcessing = false;
     speechFinalText = '';
@@ -795,6 +822,8 @@ async function toggleMic() {
 }
 
 function stopMic(sendStop) {
+    micStartGeneration++;
+    micStarting = false;
     if (micSource) { micSource.disconnect(); micSource = null; }
     stopVoiceVisualization();
     if (micCtx) { micCtx.close(); micCtx = null; }
@@ -835,7 +864,6 @@ async function finishBrowserRecognition() {
         return;
     }
     document.getElementById('txtMessage').value = clean;
-    if (!sessionid && !(await ensureSession())) return;
     sendText();
 }
 
@@ -985,8 +1013,10 @@ let speakGen = 0;   // bumped by interrupt() to cancel sentences queued but not 
 
 function queueSpeak(text, doInterrupt, pauseMs = 520, final = true) {
     const gen = speakGen;
-    speakQueue = speakQueue.catch(() => {}).then(() => {
+    speakQueue = speakQueue.catch(() => {}).then(async () => {
         if (gen !== speakGen) return;   // an interrupt happened → drop this stale queued sentence
+        await ensureSession();
+        if (gen !== speakGen || !sessionid) return;
         return speak(text, doInterrupt, pauseMs, final);
     });
     return speakQueue;
@@ -1267,7 +1297,7 @@ async function sendText(textOverride = null, showUserBubble = true) {
     const text = (textOverride == null ? el.value : textOverride).trim();
     const mode = document.getElementById('txtType').value;
     if (!text) return;
-    if (!sessionid && !(await ensureSession())) return;
+    ensureSession();
     const startedAt = performance.now();
     const turn = ++latencyTurn;
     el.value = '';
@@ -1319,7 +1349,7 @@ async function sendText(textOverride = null, showUserBubble = true) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 message: text,
-                session_id: String(sessionid),
+                session_id: chatSessionId,
                 agent_id: CHAT_AGENT_ID,
             }),
         });
