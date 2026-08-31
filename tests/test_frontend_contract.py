@@ -7,7 +7,7 @@ ROOT = Path(__file__).parents[1]
 def test_avatar_frontend_contract():
     html = (ROOT / "web" / "index-en.html").read_text(encoding="utf-8")
     assert all(metric in html for metric in (
-        "First character:", "First TTS:", "Complete response:", "Avatar started:"
+        "KB first:", "KB done:", "TTS first:", "TTS after text:", "Total:"
     ))
     assert 'id="latencyFirst"' not in html
     assert "template.innerHTML = DOMPurify.sanitize(marked.parse(markdown))" in html
@@ -104,7 +104,7 @@ def test_avatar_frontend_contract():
     assert "await ensureSession();" in queue_speak
     assert "if (gen !== speakGen || !sessionid) return;" in queue_speak
     assert "row.hidden = true" in html
-    assert ".latency-row { display: none !important; }" in html
+    assert ".latency-row { display: flex; flex-wrap: wrap;" in html
     assert "el.parentElement.hidden = false" in html
     assert "const interruptPromise = interrupt()" in html
     assert (
@@ -132,9 +132,8 @@ def test_avatar_frontend_contract():
     assert "overflow: hidden;" in html
     assert "height: 100dvh" in html
     assert "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)" in html
-    assert "font-size: 18px" in html
-    assert "color: var(--chat-fg); font-size: 18px;" in html
-    assert "font-size: 16px" not in html.split("#conversationView { background: #fff; }", 1)[1]
+    assert "font-size: 16px; line-height: 1.4;" in html
+    assert "color: var(--chat-fg); font-size: 16px;" in html
     # Right pane stays white; the kiosk reference contributes layout only.
     assert "--chat-bg: #fff;" in html
     assert "background: var(--chat-bg) !important" in html

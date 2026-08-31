@@ -200,13 +200,18 @@
         .conversation-exit { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--chat-muted); font-size: 1.2rem; }
         .conversation-exit:hover { background: #f1f5f9; color: var(--kiosk-brand); }
         #chatResponse { flex: 1; min-height: 0 !important; height: auto !important; overflow-y: auto !important; overscroll-behavior: contain; padding: 4px 22px 22px; border: 0 !important; border-radius: 0; background: var(--chat-bg) !important; }
-        .chat-bubble { position: relative; width: fit-content; max-width: 92%; margin: 0 0 16px; padding: 12px 16px; border-radius: 14px; font-size: 18px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
+        .chat-bubble { position: relative; width: fit-content; max-width: 92%; margin: 0 0 12px; padding: 12px 16px; border-radius: 14px; font-size: 16px; line-height: 1.4; white-space: pre-wrap; word-break: break-word; }
         .chat-user { margin-left: auto; border-bottom-right-radius: 4px; background: var(--chat-bubble-user); color: #fff; }
         .chat-bot { margin-right: auto; padding-bottom: 10px; background: var(--chat-bubble-bot); color: var(--chat-fg); }
         /* Speech tail on the assistant bubble, matching the kiosk reference. */
         .chat-bot::before { content: ''; position: absolute; left: -7px; bottom: 8px; width: 0; height: 0; border-right: 10px solid var(--chat-bubble-bot); border-top: 12px solid transparent; }
         .chat-bot .bubble-content { padding-right: 64px; }
-        .chat-bot p:last-child { margin-bottom: 0; }
+        .chat-bot .bubble-content > :first-child { margin-top: 0; }
+        .chat-bot .bubble-content > :last-child { margin-bottom: 0; }
+        .chat-bot .bubble-content p { margin: 0 0 0.65em; }
+        .chat-bot .bubble-content ul,
+        .chat-bot .bubble-content ol { margin: 0.55em 0; padding-left: 1.45em; }
+        .chat-bot .bubble-content li { margin: 0.2em 0; }
         .bubble-feedback { position: absolute; right: 9px; bottom: 5px; display: flex; gap: 2px; }
         .bubble-feedback[hidden] { display: none; }
         .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--chat-accent); font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
@@ -216,7 +221,7 @@
         .chat-composer { position: relative; display: none; align-items: center; padding: 10px clamp(14px, 3vw, 40px); border-top: 1px solid var(--kiosk-line); background: #fff; }
         #app.composer-open .chat-composer { display: flex; }
         #app.composer-open .avatar-voice-control { display: none; }
-        #txtMessage { flex: 1; min-width: 0; min-height: 52px; height: 52px; padding: 13px 62px 13px 18px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: var(--chat-fg); font-size: 18px; }
+        #txtMessage { flex: 1; min-width: 0; min-height: 52px; height: 52px; padding: 13px 62px 13px 18px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; color: var(--chat-fg); font-size: 16px; }
         #txtMessage::placeholder { color: #94a3b8; }
         /* Sits inside the input's right edge; reveals the avatar voice cluster. */
         .composer-mic { position: absolute; top: 50%; right: calc(clamp(14px, 3vw, 40px) + 7px); display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: #eef1f6; color: #3d4b60; font-size: 1rem; transform: translateY(-50%); }
@@ -246,10 +251,10 @@
         #avatarSelect { min-width: 132px; width: auto; padding: 0; border: 0; background: transparent; color: inherit; font-size: 0.82rem; font-weight: 600; cursor: pointer; box-shadow: none; }
         #avatarSelect option { color: var(--kiosk-ink); background: #fff; }
 
-        .latency-row { display: none !important; }
-        .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 4px; border: 0; border-radius: 5px; background: #080b12; }
+        .latency-row { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; padding-top: 7px; border-top: 1px solid rgba(0,0,0,.09); color: var(--chat-muted); font-size: 0.72rem; line-height: 1.25; }
+        .chat-media, .chat-media-frame { display: block; width: 100%; max-height: 320px; margin-top: 6px; border: 0; border-radius: 5px; background: #080b12; }
         .chat-media-frame { aspect-ratio: 16 / 9; max-height: none; }
-        .link-qr { display: block; width: fit-content; max-width: 100%; margin-top: 4px; padding: 0; border: 0; background: transparent; }
+        .link-qr { display: block; width: fit-content; max-width: 100%; margin-top: 6px; padding: 0; border: 0; background: transparent; }
         .link-qr img { width: 156px; height: 156px; padding: 0; background: #fff; }
 
         @media (max-width: 900px) {
@@ -1295,14 +1300,22 @@ function addLatencyRow(bubble) {
     row.className = 'latency-row';
     row.hidden = true;
     row.setAttribute('aria-live', 'polite');
-    row.innerHTML = '<span hidden>First character: <strong></strong></span>' +
-        '<span hidden>First TTS: <strong></strong></span>' +
-        '<span hidden>Complete response: <strong></strong></span>' +
-        '<span hidden>Avatar started: <strong></strong></span>';
+    row.innerHTML = '<span hidden>KB first: <strong></strong></span>' +
+        '<span hidden>KB done: <strong></strong></span>' +
+        '<span hidden>TTS first: <strong></strong></span>' +
+        '<span hidden>TTS after text: <strong></strong></span>' +
+        '<span hidden>Total: <strong></strong></span>';
     const feedback = bubble.querySelector('.bubble-feedback');
     bubble.insertBefore(row, feedback || null);
     const values = row.querySelectorAll('strong');
-    return { firstChar: values[0], firstTts: values[1], complete: values[2], avatar: values[3] };
+    return {
+        kbFirst: values[0],
+        kbDone: values[1],
+        ttsFirst: values[2],
+        ttsAfterText: values[3],
+        total: values[4],
+        totalRecorded: false,
+    };
 }
 
 function setLatency(el, startedAt, name) {
@@ -1325,6 +1338,7 @@ async function getAvatarTiming() {
 }
 
 let latencyTurn = 0;
+let activeLatencyMetrics = null;
 async function watchAvatarTiming(startedAt, turn, metrics, baseline) {
     const deadline = performance.now() + 60000;
     let gotTts = false, gotAvatar = false;
@@ -1333,11 +1347,12 @@ async function watchAvatarTiming(startedAt, turn, metrics, baseline) {
             const timing = await getAvatarTiming();
             if (!gotTts && timing.tts_seq > baseline.tts_seq) {
                 gotTts = true;
-                setLatency(metrics.firstTts, startedAt, 'firstTts');
+                setLatency(metrics.ttsFirst, startedAt, 'ttsFirst');
             }
             if (!gotAvatar && timing.avatar_seq > baseline.avatar_seq) {
                 gotAvatar = true;
-                setLatency(metrics.avatar, startedAt, 'avatarStarted');
+                metrics.avatarStarted = true;
+                setLatency(metrics.ttsAfterText, startedAt, 'ttsAfterText');
             }
         } catch (e) { /* retry until timeout */ }
         await new Promise(resolve => setTimeout(resolve, 25));
@@ -1362,8 +1377,14 @@ async function sendText(textOverride = null, showUserBubble = true) {
     if (mode === 'echo') {
         const botBubble = addBubble('bot', 'Echo');
         const metrics = addLatencyRow(botBubble);
-        metrics.firstChar.textContent = 'n/a';
-        metrics.complete.textContent = 'n/a';
+        metrics.kbFirst.textContent = 'n/a';
+        metrics.kbDone.textContent = 'n/a';
+        metrics.kbFirst.parentElement.hidden = false;
+        metrics.kbDone.parentElement.hidden = false;
+        metrics.kbFirst.closest('.latency-row').hidden = false;
+        metrics.startedAt = startedAt;
+        metrics.turn = turn;
+        activeLatencyMetrics = metrics;
         await interrupt();
         watchAvatarTiming(startedAt, turn, metrics, { tts_seq: 0, avatar_seq: 0 });
         await queueSpeak(text, false, 300, true);     // just speak what was typed
@@ -1374,6 +1395,9 @@ async function sendText(textOverride = null, showUserBubble = true) {
     // so the avatar starts on sentence 1 instead of waiting for the whole reply.
     const botBubble = addBubble('bot', '');
     const metrics = addLatencyRow(botBubble);
+    metrics.startedAt = startedAt;
+    metrics.turn = turn;
+    activeLatencyMetrics = metrics;
     const controller = new AbortController();
     activeChatAbortController = controller;
     textResponseActive = true;
@@ -1429,7 +1453,7 @@ async function sendText(textOverride = null, showUserBubble = true) {
                 if (chunk) {
                     if (!gotFirstCharacter) {
                         gotFirstCharacter = true;
-                        setLatency(metrics.firstChar, startedAt, 'firstCharacter');
+                        setLatency(metrics.kbFirst, startedAt, 'kbFirst');
                     }
                     reply += chunk;
                     renderBotBubble(botBubble, reply);
@@ -1440,7 +1464,7 @@ async function sendText(textOverride = null, showUserBubble = true) {
             }
         }
         flushSentences(true);                         // speak the final partial sentence
-        setLatency(metrics.complete, startedAt, 'completeResponse');
+        setLatency(metrics.kbDone, startedAt, 'kbDone');
     } catch (e) {
         if (e.name === 'AbortError') return;
         reply += '\n[error: ' + (e.message || e) + ']';
@@ -1522,10 +1546,17 @@ async function syncAvatarSpeaking() {
         });
         const payload = await response.json();
         const speaking = response.ok && payload.code === 0 && Boolean(payload.data);
+        const wasSpeaking = avatarSpeaking;
         if (speaking !== avatarSpeaking) {
             avatarSpeaking = speaking;
             renderMicButton();
             renderComposerAction();
+        }
+        if (!speaking && wasSpeaking && activeLatencyMetrics &&
+            activeLatencyMetrics.turn === latencyTurn && activeLatencyMetrics.avatarStarted &&
+            !activeLatencyMetrics.totalRecorded) {
+            activeLatencyMetrics.totalRecorded = true;
+            setLatency(activeLatencyMetrics.total, activeLatencyMetrics.startedAt, 'total');
         }
     } catch (error) { /* reconnect loop owns transport errors */ }
 }
