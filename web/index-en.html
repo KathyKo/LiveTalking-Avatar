@@ -83,11 +83,11 @@
         .param-hint { font-size: 0.75rem; color: #94a3b8; }
         ::placeholder { color: #9ca3af !important; opacity: 1; }
         :-ms-input-placeholder { color: #9ca3af; }
-        .chat-bubble { max-width: 94%; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; font-size: 0.9rem; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
+        .chat-bubble { max-width: 94%; padding: 8px 12px; border-radius: 12px; margin-bottom: 8px; font-size: 16px; line-height: 1.45; white-space: pre-wrap; word-break: break-word; }
         .chat-user { background: #4361ee; color: #fff; margin-left: auto; border-bottom-right-radius: 4px; }
         .chat-bot { background: rgba(0,0,0,0.06); color: #1e293b; margin-right: auto; border-bottom-left-radius: 4px; }
         .app-shell { display: grid; grid-template-rows: minmax(0, 1fr) 76px; width: 100%; height: 100dvh; padding: 0 !important; overflow: hidden; background: #fff; }
-        .main-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr); width: 100%; min-height: 0; overflow: hidden; background: #fff; }
+        .main-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: 100%; min-height: 0; overflow: hidden; background: #fff; }
         .avatar-pane { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
         .chat-pane { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; overflow: hidden; background: #fff; border-left: 1px solid #e5e7eb; }
         .avatar-stage { position: relative; display: flex; flex: 1; min-height: 0; align-items: stretch; justify-content: center; overflow: hidden; }
@@ -141,7 +141,7 @@
         .tour-qr { display: flex; align-items: center; gap: 12px; margin-top: 8px; }
         .tour-qr img { width: 144px; height: 144px; padding: 6px; border-radius: 4px; background: #fff; }
         .tour-qr a { font-size: 0.85rem; }
-        #txtMessage { flex: 1; min-width: 0; height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 1.05rem; padding: 8px 16px; overflow: hidden; }
+        #txtMessage { flex: 1; min-width: 0; height: 42px; min-height: 42px; resize: none; border: 1px solid #d1d5db; border-radius: 999px; font-size: 16px; padding: 8px 16px; overflow: hidden; }
         @media (max-width: 992px) {
             .app-shell { grid-template-rows: minmax(0, 1fr) 64px; }
             .main-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 46%) minmax(0, 54%); }
@@ -197,7 +197,7 @@
         .landing-talk:hover { background: rgba(25, 33, 48, 0.98); transform: translateY(-1px); }
 
         #conversationView { background: #fff; }
-        .main-layout { display: grid; grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr); width: 100%; height: 100%; min-height: 0; overflow: hidden; background: #fff; }
+        .main-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); width: 100%; height: 100%; min-height: 0; overflow: hidden; background: #fff; }
         .avatar-pane { min-width: 0; min-height: 0; overflow: hidden; background: #0d1118; }
         .avatar-stage { position: relative; width: 100%; height: 100%; overflow: hidden; }
         #video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; border-radius: 0; background: #111827 !important; }
@@ -211,7 +211,7 @@
         .chat-toolbar p { margin: 4px 0 0; color: var(--kiosk-muted); font-size: 0.78rem; }
         .chat-card { display: flex; flex: 1; min-height: 0; flex-direction: column; }
         #chatResponse { flex: 1; min-height: 0 !important; height: auto !important; overflow-y: auto !important; overscroll-behavior: contain; padding: 18px 20px; border: 0 !important; border-radius: 0; background: var(--kiosk-canvas) !important; }
-        .chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 0.95rem; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
+        .chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 16px; line-height: 1.48; white-space: pre-wrap; word-break: break-word; }
         .chat-user { margin-left: auto; background: var(--kiosk-brand); color: #fff; }
         .chat-bot { position: relative; margin-right: auto; padding-bottom: 10px; background: #e9eef5; color: var(--kiosk-ink); }
         .chat-bot .bubble-content { padding-right: 64px; }
@@ -222,7 +222,7 @@
         .feedback-button:hover { background: rgba(49, 94, 232, 0.11); transform: translateY(-1px); }
         .feedback-button.selected { background: #315ee8; color: #fff; }
         .chat-composer { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding: 14px 16px; border-top: 1px solid var(--kiosk-line); background: #fff; }
-        #txtMessage { flex: 1; min-width: 0; min-height: 44px; height: 44px; padding: 10px 14px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: var(--kiosk-ink); }
+        #txtMessage { flex: 1; min-width: 0; min-height: 44px; height: 44px; padding: 10px 14px; resize: none; overflow: hidden; border: 1px solid #cbd5e1; border-radius: 7px; background: #fff; color: var(--kiosk-ink); font-size: 16px; }
         #txtMessage::placeholder { color: #94a3b8; }
         #btnMic, .composer-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; padding: 0; border-radius: 7px; font-size: 1.05rem; }
         #btnMic { border: 0; background: var(--kiosk-brand); color: #fff; }
@@ -232,6 +232,23 @@
         .btn-outline-custom { width: 44px; height: 44px; padding: 0; border: 1px solid #b8c5d9; border-radius: 7px; color: #52627b; background: #fff; }
         .btn-danger-custom:hover { background: #c92f3a; }
         .btn-outline-custom:hover { border-color: var(--kiosk-brand); color: var(--kiosk-brand); }
+
+        .voice-control { flex: 0 0 auto; min-width: 176px; height: 46px; display: inline-flex; align-items: center; justify-content: flex-start; gap: 10px; padding: 0 15px; border: 2px solid var(--kiosk-brand); border-radius: 999px; background: #172033; color: #fff; font-weight: 700; box-shadow: 0 5px 14px rgba(23, 32, 51, 0.2); transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease; }
+        #btnMic.voice-control { width: auto; min-width: 176px; height: 46px; padding: 0 15px; border: 2px solid var(--kiosk-brand); border-radius: 999px; background: #172033; }
+        #btnMic.voice-control:hover { background: #202b42; }
+        .voice-control.recording { border-color: #ff6b35; box-shadow: 0 0 18px rgba(255, 107, 53, 0.38); }
+        .voice-control.interrupting { border-color: #f59e0b; box-shadow: 0 0 18px rgba(245, 158, 11, 0.35); }
+        .voice-control.processing { cursor: wait; border-color: #94a3b8; opacity: 0.82; box-shadow: none; }
+        .voice-control-icon { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; flex: 0 0 auto; }
+        .voice-control.recording .voice-control-icon { border-radius: 4px; background: #ff453a; }
+        .voice-control.recording .voice-control-icon i { display: none; }
+        .voice-control.interrupting .voice-control-icon { border: 3px solid #f59e0b; border-radius: 50%; }
+        .voice-control.interrupting .voice-control-icon::before { content: ''; width: 9px; height: 3px; border-radius: 2px; background: #f59e0b; transform: rotate(45deg); }
+        .voice-control.interrupting .voice-control-icon i { display: none; }
+        .voice-bars { display: none; height: 24px; align-items: center; gap: 3px; }
+        .voice-control.recording .voice-bars { display: flex; }
+        .voice-bar { width: 3px; height: 4px; max-height: 24px; border-radius: 2px; background: #ff6b35; transition: height 55ms linear; }
+        .voice-label { flex: 1; white-space: nowrap; text-align: left; }
 
         #avatarControl { position: absolute; z-index: 12; display: inline-flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid rgba(255,255,255,0.45); border-radius: 7px; background: rgba(15, 23, 42, 0.68); backdrop-filter: blur(10px); color: #fff; }
         #avatarControl > i { font-size: 1rem; }
@@ -266,7 +283,7 @@
             #avatarControl { top: 12px !important; right: 12px !important; left: auto !important; }
             #avatarSelect { min-width: 130px; }
             .btn-danger-custom span { display: none; }
-            .chat-bubble { font-size: 0.9rem; }
+            .chat-bubble { font-size: 16px; }
         }
         @media (prefers-reduced-motion: reduce) {
             .prompt-track { animation-play-state: paused; }
@@ -425,8 +442,14 @@
     </div>
     <div class="chat-composer">
         <textarea class="form-control form-control-sm" id="txtMessage" rows="1" placeholder="Enter a message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
-        <button id="btnMic" type="button" onclick="toggleMic()" title="Voice input" aria-label="Voice input"><i class="bi bi-mic-fill"></i></button>
-        <button class="btn-danger-custom btn-sm" onclick="interrupt()" title="Stop the avatar talking"><i class="bi bi-stop-circle"></i> Stop</button>
+        <button id="btnMic" class="voice-control" type="button" onclick="handleVoiceControl()" title="Press to speak" aria-label="Press to speak" aria-pressed="false">
+            <span class="voice-control-icon" aria-hidden="true"><i class="bi bi-mic-fill"></i></span>
+            <span class="voice-bars" aria-hidden="true">
+                <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
+                <span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span><span class="voice-bar"></span>
+            </span>
+            <span class="voice-label">Press to Speak</span>
+        </button>
         <button class="btn-outline-custom btn-sm" onclick="document.getElementById('chatResponse').innerHTML=''" title="Clear chat"><i class="bi bi-trash"></i></button>
     </div>
 </div>
@@ -555,32 +578,60 @@ async function endConversation() {
     landingVideo.play().catch(() => {});
 }
 
-// --- Voice input (mic → /api/asr → textarea → send) ---
-let micWs = null, micCtx = null, micStream = null, micNode = null, micOn = false;
+// --- Voice input (browser SpeechRecognition, matching avatar_ui) ---
+let speechRecognition = null, speechFinalText = '', speechInterimText = '';
+let micCtx = null, micStream = null, micSource = null;
+let micAnalyser = null, micVisualFrame = null, micOn = false, micProcessing = false, avatarSpeaking = false;
 
-function renderMicButton(listening) {
-    const btn = document.getElementById('btnMic');
-    const label = listening ? 'Stop listening' : 'Voice input';
-    btn.innerHTML = listening ? '<i class="bi bi-stop-fill"></i>' : '<i class="bi bi-mic-fill"></i>';
-    btn.classList.toggle('listening', listening);
-    btn.title = label;
-    btn.setAttribute('aria-label', label);
+function resetVoiceBars() {
+    document.querySelectorAll('.voice-bar').forEach(bar => { bar.style.height = '4px'; });
 }
 
-// The ASR server assumes 16 kHz mono. Browsers usually capture at 44.1/48 kHz;
-// sending that as-if-16k garbles recognition (wrong words, wrong language). Downsample.
-function down16k(buf, inRate) {
-    if (inRate === 16000) return buf;
-    const ratio = inRate / 16000;
-    const outLen = Math.floor(buf.length / ratio);
-    const out = new Float32Array(outLen);
-    for (let i = 0; i < outLen; i++) {
-        const start = Math.floor(i * ratio), end = Math.min(Math.floor((i + 1) * ratio), buf.length);
-        let s = 0, n = 0;
-        for (let j = start; j < end; j++) { s += buf[j]; n++; }
-        out[i] = n ? s / n : (buf[start] || 0);
+function stopVoiceVisualization() {
+    if (micVisualFrame) cancelAnimationFrame(micVisualFrame);
+    micVisualFrame = null;
+    micAnalyser = null;
+    resetVoiceBars();
+}
+
+function drawVoiceBars() {
+    if (!micOn || !micAnalyser) return;
+    const values = new Uint8Array(micAnalyser.frequencyBinCount);
+    micAnalyser.getByteFrequencyData(values);
+    const bars = document.querySelectorAll('.voice-bar');
+    const step = Math.max(1, Math.floor(values.length / bars.length));
+    bars.forEach((bar, index) => {
+        const normalized = values[index * step] / 255;
+        bar.style.height = `${4 + normalized * 20}px`;
+    });
+    micVisualFrame = requestAnimationFrame(drawVoiceBars);
+}
+
+function renderMicButton() {
+    const btn = document.getElementById('btnMic');
+    const mode = avatarSpeaking ? 'interrupt' : (micOn ? 'recording' : (micProcessing ? 'processing' : 'idle'));
+    const label = mode === 'interrupt' ? 'Interrupt' : (mode === 'recording' ? 'End' : (mode === 'processing' ? 'Processing...' : 'Press to Speak'));
+    btn.classList.toggle('recording', mode === 'recording');
+    btn.classList.toggle('interrupting', mode === 'interrupt');
+    btn.classList.toggle('processing', mode === 'processing');
+    btn.disabled = mode === 'processing';
+    btn.querySelector('.voice-label').textContent = label;
+    btn.title = label;
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-pressed', String(mode !== 'idle'));
+    btn.setAttribute('aria-busy', String(mode === 'processing'));
+}
+
+async function handleVoiceControl() {
+    if (micProcessing) return;
+    if (avatarSpeaking) {
+        await interrupt();
+        avatarSpeaking = false;
+        renderMicButton();
+        if (!micOn) await toggleMic();
+        return;
     }
-    return out;
+    await toggleMic();
 }
 
 async function toggleMic() {
@@ -588,63 +639,108 @@ async function toggleMic() {
     if (micOn) { stopMic(true); return; }
     if (sessionid) interrupt();
     else ensureSession();
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        alert('Browser speech recognition is not supported. Please use Chrome or Edge.');
+        return;
+    }
     try {
-        micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        micStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
+        });
     } catch (e) { return alert('Microphone permission denied'); }
 
     micOn = true;
-    renderMicButton(true);
+    micProcessing = false;
+    speechFinalText = '';
+    speechInterimText = '';
+    renderMicButton();
     document.getElementById('txtMessage').placeholder = 'Listening... click mic again to finish';
 
-    const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    micWs = new WebSocket(proto + location.host + '/api/asr');
-    micWs.onopen = () => {
-        micWs.send(JSON.stringify({ chunk_size: [5, 10, 5], wav_name: 'h5', is_speaking: true, mode: '2pass', itn: false }));
-        micCtx = new AudioContext();   // native rate; we resample to 16k ourselves (forcing 16k is unreliable across browsers)
-        const inRate = micCtx.sampleRate;
-        const src = micCtx.createMediaStreamSource(micStream);
-        micNode = micCtx.createScriptProcessor(4096, 1, 1);
-        micNode.onaudioprocess = (e) => {
-            if (!micWs || micWs.readyState !== 1 || !micOn) return;
-            const out = down16k(e.inputBuffer.getChannelData(0), inRate);   // guarantee true 16 kHz to the ASR server
-            const i16 = new Int16Array(out.length);
-            for (let i = 0; i < out.length; i++) i16[i] = Math.max(-32768, Math.min(32767, out[i] * 32768));
-            micWs.send(i16.buffer);
-        };
-        src.connect(micNode);
-        micNode.connect(micCtx.destination);
+    micCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (micCtx.state === 'suspended') await micCtx.resume();
+    micSource = micCtx.createMediaStreamSource(micStream);
+    micAnalyser = micCtx.createAnalyser();
+    micAnalyser.fftSize = 256;
+    micSource.connect(micAnalyser);
+    drawVoiceBars();
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+    recognition.onresult = event => {
+        let interim = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const text = event.results[i][0].transcript;
+            if (event.results[i].isFinal) speechFinalText += `${text} `;
+            else interim += text;
+        }
+        speechInterimText = interim;
+        document.getElementById('txtMessage').value = `${speechFinalText}${speechInterimText}`.trim();
     };
-    micWs.onmessage = async (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.is_final) {
-            // strip SenseVoice emotion emojis and symbols
-            const clean = (msg.text || '').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{FE0F}]/gu, '').trim();
-            stopMic(false);
-            if (clean) {
-                document.getElementById('txtMessage').value = clean;
-                if (!sessionid && !(await ensureSession())) return;
-                sendText();
-            } else {
-                addBubble('bot', '[no speech recognized]');
+    recognition.onerror = event => {
+        if (event.error === 'aborted' || event.error === 'no-speech') return;
+        console.error('Speech recognition error:', event.error);
+        if (micProcessing) finishBrowserRecognition();
+    };
+    recognition.onend = () => {
+        if (micProcessing) {
+            finishBrowserRecognition();
+        } else if (micOn && speechRecognition === recognition) {
+            try { recognition.start(); } catch (error) {
+                console.error('Unable to restart speech recognition:', error);
             }
         }
     };
-    micWs.onerror = () => stopMic(false);
+    speechRecognition = recognition;
+    recognition.start();
 }
 
 function stopMic(sendStop) {
-    if (micNode) { micNode.disconnect(); micNode = null; }
+    if (micSource) { micSource.disconnect(); micSource = null; }
+    stopVoiceVisualization();
     if (micCtx) { micCtx.close(); micCtx = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
-    if (micWs && micWs.readyState === 1 && sendStop) {
-        micWs.send(JSON.stringify({ is_speaking: false }));
-        // ws stays open until the final result arrives in onmessage
-    } else if (micWs) {
-        micWs.close(); micWs = null;
+    micOn = false;
+    if (speechRecognition && sendStop) {
+        micProcessing = true;
+        try { speechRecognition.stop(); } catch (error) { finishBrowserRecognition(); }
+    } else if (speechRecognition) {
+        micProcessing = false;
+        speechRecognition.onresult = null;
+        speechRecognition.onerror = null;
+        speechRecognition.onend = null;
+        try { speechRecognition.abort(); } catch (error) { /* already stopped */ }
+        speechRecognition = null;
         document.getElementById('txtMessage').placeholder = 'Enter a message...';
     }
-    micOn = false;
-    renderMicButton(false);
+    renderMicButton();
+}
+
+async function finishBrowserRecognition() {
+    const recognition = speechRecognition;
+    speechRecognition = null;
+    if (recognition) {
+        recognition.onresult = null;
+        recognition.onerror = null;
+        recognition.onend = null;
+    }
+    const clean = `${speechFinalText}${speechInterimText}`.replace(/\s+/g, ' ').trim();
+    speechFinalText = '';
+    speechInterimText = '';
+    micProcessing = false;
+    document.getElementById('txtMessage').placeholder = 'Enter a message...';
+    renderMicButton();
+    if (!clean) {
+        document.getElementById('txtMessage').value = '';
+        addBubble('bot', '[no speech recognized]');
+        return;
+    }
+    document.getElementById('txtMessage').value = clean;
+    if (!sessionid && !(await ensureSession())) return;
+    sendText();
 }
 
 // --- WebRTC ---
@@ -1169,6 +1265,8 @@ async function sendText(textOverride = null, showUserBubble = true) {
 function interrupt() {
     speakGen++;                            // invalidate every sentence still queued in the frontend
     speakQueue = Promise.resolve();
+    avatarSpeaking = false;
+    renderMicButton();
     if (!sessionid) return Promise.resolve();
     return fetch('/interrupt_talk', {
         method: 'POST',
@@ -1213,6 +1311,31 @@ async function loadAvatarList() {
         updateLandingSource();
     } catch (e) { console.warn('avatar list failed', e); }
 }
+
+async function syncAvatarSpeaking() {
+    if (!sessionid) {
+        if (avatarSpeaking) {
+            avatarSpeaking = false;
+            renderMicButton();
+        }
+        return;
+    }
+    try {
+        const response = await fetch('/is_speaking', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionid: String(sessionid) }),
+        });
+        const payload = await response.json();
+        const speaking = response.ok && payload.code === 0 && Boolean(payload.data);
+        if (speaking !== avatarSpeaking) {
+            avatarSpeaking = speaking;
+            renderMicButton();
+        }
+    } catch (error) { /* reconnect loop owns transport errors */ }
+}
+
+setInterval(syncAvatarSpeaking, 250);
 
 // Switch avatar live — no backend restart. Reconnect with the chosen avatar;
 // build_avatar_session loads it on the backend for this session (+ its voice).

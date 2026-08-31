@@ -29,6 +29,7 @@ from utils.logger import logger
 # ASR_MODEL=iic/SenseVoiceSmall  -> revert to SenseVoice
 # ASR_MODEL=elevenlabs           -> cloud ElevenLabs Scribe (needs ELEVENLABS_API_KEY)
 _ASR_MODEL_ID = os.environ.get("ASR_MODEL", "Qwen/Qwen3-ASR-0.6B")
+_ASR_LANGUAGE = os.environ.get("ASR_LANGUAGE", "English").strip() or None
 _IS_SENSEVOICE = "sensevoice" in _ASR_MODEL_ID.lower()
 _IS_ELEVENLABS = _ASR_MODEL_ID.lower() == "elevenlabs"
 
@@ -101,10 +102,15 @@ def _run_inference(audio_float32: np.ndarray, sample_rate: int, use_itn: bool):
     else:
         model = _load_asr_model()
         if _IS_SENSEVOICE:
-            res = model.generate(input=wav_buf, cache={}, language="auto",
+            res = model.generate(input=wav_buf, cache={}, language=_ASR_LANGUAGE or "auto",
                                  use_itn=use_itn, batch_size_s=60)
         else:
-            res = model.generate(input=wav_buf, cache={}, batch_size_s=60)
+            res = model.generate(
+                input=wav_buf,
+                cache={},
+                language=_ASR_LANGUAGE,
+                batch_size_s=60,
+            )
         text = ""
         if res and len(res) > 0 and res[0].get("text"):
             text = res[0]["text"]

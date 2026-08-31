@@ -24,6 +24,7 @@ def test_avatar_frontend_contract():
     assert ".replace(/(?:https?:\\/\\/|www\\.)\\S+/g, ' ')" in html
     assert 'id="landingView"' in html
     assert 'id="landingVideo"' in html
+    assert 'id="landingAvatarSelect"' not in html
     assert 'src="/api/avatar-idle/ditto_man?v=idle-1"' in html
     assert 'id="conversationView" class="main-layout" hidden' in html
     assert "function enterConversationAndTalk()" in html
@@ -98,23 +99,43 @@ def test_avatar_frontend_contract():
     assert "html, body {" in html
     assert "overflow: hidden;" in html
     assert "height: 100dvh" in html
-    assert "grid-template-columns: minmax(0, 3fr) minmax(360px, 2fr)" in html
+    assert "grid-template-columns: minmax(0, 1fr) minmax(0, 1fr)" in html
+    assert ".chat-bubble { width: fit-content; max-width: 100%; margin: 0 0 14px; padding: 12px 14px; border-radius: 7px; font-size: 16px;" in html
+    assert "color: var(--kiosk-ink); font-size: 16px;" in html
     assert "#conversationView[hidden] { display: none !important; }" in html
     assert "#app.conversation-active > .chat-composer { display: flex; }" in html
     assert html.index('class="chat-toolbar"') < html.index('id="chatResponse"')
     assert html.index('id="chatResponse"') < html.index('class="chat-composer"')
     assert "#chatResponse { flex: 1;" in html
     assert "overflow-y: auto !important" in html
-    assert 'id="btnMic" type="button" onclick="toggleMic()"' in html
+    assert 'id="btnMic" class="voice-control" type="button" onclick="handleVoiceControl()"' in html
     assert html.count('id="btnMic"') == 1
     assert 'onclick="sendText()"' not in html
-    assert "function renderMicButton(listening)" in html
+    assert "function renderMicButton()" in html
+    assert "function drawVoiceBars()" in html
+    assert "function stopVoiceVisualization()" in html
+    assert "document.querySelectorAll('.voice-bar')" in html
+    assert html.count('class="voice-bar"') == 12
+    assert "async function handleVoiceControl()" in html
+    assert "micProcessing = false" in html
+    assert "Processing..." in html
+    assert "btn.disabled = mode === 'processing'" in html
+    assert "if (avatarSpeaking)" in html
+    assert "setInterval(syncAvatarSpeaking, 250)" in html
+    assert "micSource.connect(micAnalyser)" in html
     toggle_mic = html.split("async function toggleMic()", 1)[1].split(
         "function stopMic", 1
     )[0]
     assert "Please connect WebRTC first" not in toggle_mic
-    assert "navigator.mediaDevices.getUserMedia({ audio: true })" in toggle_mic
-    assert "micWs.onmessage = async" in toggle_mic
+    assert "window.SpeechRecognition || window.webkitSpeechRecognition" in toggle_mic
+    assert "recognition.continuous = true" in toggle_mic
+    assert "recognition.interimResults = true" in toggle_mic
+    assert "recognition.lang = 'en-US'" in toggle_mic
+    assert "recognition.onresult = event =>" in toggle_mic
+    assert "echoCancellation: true" in toggle_mic
+    assert "noiseSuppression: true" in toggle_mic
+    assert "autoGainControl: true" in toggle_mic
+    assert "'/api/asr'" not in html
     assert '<select id="txtType" class="visually-hidden"' in html
     assert ".chat-bubble { width: fit-content; max-width: 100%;" in html
     assert "if (connecting || (pc && ['new', 'connecting', 'connected'].includes(pc.connectionState))) return;" in html
@@ -173,6 +194,24 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-240}" in script
     assert "DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-0}" in script
     assert "DITTO_USE_GENERATED_IDLE=${DITTO_USE_GENERATED_IDLE:-0}" in script
+    assert "ASR_LANGUAGE=${ASR_LANGUAGE:-English}" in script
+    assert "ASR_BACKEND=${ASR_BACKEND:-browser}" in script
+
+
+def test_qwen_asr_is_restricted_to_english_by_default():
+    server = (ROOT / "server" / "asr_server.py").read_text(encoding="utf-8")
+    env = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert '_ASR_LANGUAGE = os.environ.get("ASR_LANGUAGE", "English").strip() or None' in server
+    assert "language=_ASR_LANGUAGE" in server
+    assert "ASR_LANGUAGE=English" in env
+
+
+def test_browser_stt_disables_local_asr_by_default():
+    routes = (ROOT / "server" / "routes.py").read_text(encoding="utf-8")
+    env = (ROOT / ".env.example").read_text(encoding="utf-8")
+    assert 'os.environ.get("ASR_BACKEND", "browser").lower() == "local"' in routes
+    assert "[ASR] Browser SpeechRecognition enabled (en-US); local model disabled" in routes
+    assert "ASR_BACKEND=browser" in env
 
 
 def test_generated_idle_is_optional_and_preserves_original():

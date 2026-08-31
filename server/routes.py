@@ -4,6 +4,7 @@
 
 import json
 import asyncio
+import os
 import re
 from pathlib import Path
 from aiohttp import web
@@ -322,17 +323,21 @@ def setup_routes(app):
     app.router.add_get("/api/admin/sessions", admin_sessions)
     app.router.add_get("/api/iceservers", ice_servers_route)
 
-    # ── Local ASR endpoint (SenseVoice/FunASR) ── Issue #604 ──
-    try:
-        from server.asr_server import asr_websocket_handler, is_funasr_available, warmup_async
-        if is_funasr_available():
-            app.router.add_get("/api/asr", asr_websocket_handler)
-            warmup_async()   # preload model so the first utterance is fast
-            logger.info("[ASR] ✅ Local ASR endpoint enabled at /api/asr")
-        else:
-            logger.info("[ASR] local ASR backend unavailable — /api/asr disabled")
-    except Exception as e:
-        logger.warning(f"[ASR] Failed to register ASR endpoint: {e}")
+    # Browser SpeechRecognition is the default STT. Keep the local endpoint as
+    # an opt-in rollback path without loading Qwen/FunASR during normal startup.
+    if os.environ.get("ASR_BACKEND", "browser").lower() == "local":
+        try:
+            from server.asr_server import asr_websocket_handler, is_funasr_available, warmup_async
+            if is_funasr_available():
+                app.router.add_get("/api/asr", asr_websocket_handler)
+                warmup_async()
+                logger.info("[ASR] Local ASR endpoint enabled at /api/asr")
+            else:
+                logger.info("[ASR] local ASR backend unavailable — /api/asr disabled")
+        except Exception as e:
+            logger.warning(f"[ASR] Failed to register ASR endpoint: {e}")
+    else:
+        logger.info("[ASR] Browser SpeechRecognition enabled (en-US); local model disabled")
 
     # Register avatar generation related routes
     setup_avatar_routes(app)
