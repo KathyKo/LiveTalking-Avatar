@@ -19,7 +19,7 @@ def test_avatar_frontend_contract():
     assert "if (!youtube) content.appendChild(createLinkQr(url))" in html
     assert "function createLinkQr(url)" in html
     assert "className = 'link-qr'" in html
-    assert "api.qrserver.com" in html
+    assert "'/api/qr?data=' + encodeURIComponent(href)" in html
     assert "const CHAT_URL_RE = /`?((?:https?:\\/\\/|www\\.)" in html
     assert ".replace(/(?:https?:\\/\\/|www\\.)\\S+/g, ' ')" in html
     assert 'id="landingView"' in html
@@ -123,8 +123,11 @@ def test_avatar_frontend_contract():
         "DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8}" in ditto_env
     )
     assert "fetch('/avatar_timing'" in html
-    assert '<audio id="audio"' not in html
+    assert '<audio id="remoteAudio" autoplay playsinline hidden></audio>' in html
     assert "stream.addTrack(evt.track)" in html
+    assert "if (evt.track.kind === 'audio')" in html
+    assert "remoteAudio.srcObject = new MediaStream([evt.track]);" in html
+    assert "remoteAudio.play().catch(error => console.warn('remote audio playback blocked', error));" in html
     assert "html, body {" in html
     assert "overflow: hidden;" in html
     assert "height: 100dvh" in html
@@ -182,13 +185,20 @@ def test_avatar_frontend_contract():
     avatar_stage = html.split('class="mt-3 avatar-stage"', 1)[1].split('<div class="chat-pane"', 1)[0]
     composer = html.split('<div class="chat-composer">', 1)[1].split('</div>', 1)[0]
     assert 'id="btnMic"' in avatar_stage
-    # Strip is the textarea plus the mic that switches to voice mode. No send, no clear.
+    # Strip has one stateful action: mic while idle, Stop while text/voice output is active.
     assert 'id="btnMic"' not in composer
     assert 'id="txtMessage"' in composer
     assert "sendText()" in composer          # Enter key handler
     assert composer.count("<button") == 1
     assert 'class="composer-mic"' in composer
-    assert 'onclick="startVoiceMode()"' in composer
+    assert 'id="composerAction"' in composer
+    assert 'onclick="handleComposerAction()"' in composer
+    assert "function renderComposerAction()" in html
+    assert "async function stopTextResponse()" in html
+    assert "activeChatAbortController.abort()" in html
+    assert "const controller = new AbortController();" in send_text
+    assert "signal: controller.signal," in send_text
+    assert "if (e.name === 'AbortError') return;" in send_text
     assert "bi-trash" not in html
     assert "composer-send" not in html
     assert 'class="btn-outline-custom' not in html
@@ -261,6 +271,15 @@ def test_avatar_idle_endpoint_is_limited_to_idle_video():
     assert "async def avatar_idle_media(request):" in routes
     assert 'idle = avatar_dir / "idle.mp4"' in routes
     assert 'app.router.add_get("/api/avatar-idle/{avatar_id}", avatar_idle_media)' in routes
+
+
+def test_qr_codes_are_generated_locally():
+    routes = (ROOT / "server" / "routes.py").read_text(encoding="utf-8")
+    requirements = (ROOT / "docker" / "requirements.txt").read_text(encoding="utf-8")
+    assert "async def qr_code(request):" in routes
+    assert 'app.router.add_get("/api/qr", qr_code)' in routes
+    assert 'content_type="image/png"' in routes
+    assert "qrcode[pil]==8.2" in requirements
 
 
 def test_ditto_defaults_to_fast_high_resolution_rendering():

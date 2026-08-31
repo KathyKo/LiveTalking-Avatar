@@ -4,10 +4,12 @@
 
 import json
 import asyncio
+from io import BytesIO
 import os
 import re
 from pathlib import Path
 from aiohttp import web
+import qrcode
 
 from utils.logger import logger
 
@@ -256,6 +258,35 @@ async def avatar_idle_media(request):
     raise web.HTTPNotFound()
 
 
+async def qr_code(request):
+    """Generate a QR image locally so kiosk browsers need no third-party QR host."""
+    data = request.query.get("data", "").strip()
+    if not data or len(data) > 2048:
+        raise web.HTTPBadRequest(text="A QR payload up to 2048 characters is required")
+
+    try:
+        code = qrcode.QRCode(
+            version=None,
+            error_correction=qrcode.constants.ERROR_CORRECT_M,
+            box_size=8,
+            border=2,
+        )
+        code.add_data(data)
+        code.make(fit=True)
+        image = code.make_image(fill_color="#101828", back_color="white")
+        output = BytesIO()
+        image.save(output, format="PNG")
+    except Exception as exc:
+        logger.exception("QR generation failed")
+        raise web.HTTPBadRequest(text=f"Unable to generate QR code: {exc}")
+
+    return web.Response(
+        body=output.getvalue(),
+        content_type="image/png",
+        headers={"Cache-Control": "private, max-age=3600"},
+    )
+
+
 async def admin_config(request):
     """Admin: get global configuration parameters"""
     try:
@@ -319,6 +350,7 @@ def setup_routes(app):
     app.router.add_get("/api/avatars", list_avatars)
     app.router.add_get("/api/avatar-source/{avatar_id}", avatar_source_media)
     app.router.add_get("/api/avatar-idle/{avatar_id}", avatar_idle_media)
+    app.router.add_get("/api/qr", qr_code)
     app.router.add_get("/api/admin/config", admin_config)
     app.router.add_get("/api/admin/sessions", admin_sessions)
     app.router.add_get("/api/iceservers", ice_servers_route)

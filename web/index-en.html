@@ -221,6 +221,8 @@
         /* Sits inside the input's right edge; reveals the avatar voice cluster. */
         .composer-mic { position: absolute; top: 50%; right: calc(clamp(14px, 3vw, 40px) + 7px); display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: #eef1f6; color: #3d4b60; font-size: 1rem; transform: translateY(-50%); }
         .composer-mic:hover { background: #dee3ec; color: var(--kiosk-brand); }
+        .composer-mic.stop-response { background: #ef4444; color: #fff; }
+        .composer-mic.stop-response:hover { background: #dc2626; color: #fff; }
 
         /* Rounded rectangle, not a pill — the ID selector keeps any legacy #btnMic rule from winning. */
         #btnMic.voice-control { flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: flex-start; gap: 13px; width: auto; min-width: 306px; height: 66px; padding: 0 24px 0 13px; border: 3px solid var(--kiosk-glow); border-radius: 18px; background: #0a0a0a; color: #fff; font-weight: 700; box-shadow: 0 0 18px var(--kiosk-glow-soft); transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease; }
@@ -443,6 +445,7 @@
                     <div id="offerError" class="alert alert-danger mt-3" role="alert" style="display:none;"></div>
                     <div class="mt-3 avatar-stage">
                         <video id="video" autoplay playsinline muted></video>
+                        <audio id="remoteAudio" autoplay playsinline hidden></audio>
                         <div class="avatar-voice-control">
                             <button class="round-button small" type="button" onclick="openInfoDialog()" title="About this assistant" aria-label="About this assistant">
                                 <i class="bi bi-info-lg" aria-hidden="true"></i>
@@ -493,7 +496,7 @@
     </div>
     <div class="chat-composer">
         <textarea class="form-control form-control-sm" id="txtMessage" rows="1" placeholder="Type your message..." onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendText();}"></textarea>
-        <button class="composer-mic" type="button" onclick="startVoiceMode()" title="Speak instead" aria-label="Speak instead"><i class="bi bi-mic-fill" aria-hidden="true"></i></button>
+        <button id="composerAction" class="composer-mic" type="button" onclick="handleComposerAction()" title="Speak instead" aria-label="Speak instead"><i class="bi bi-mic-fill" aria-hidden="true"></i></button>
     </div>
 </div>
 
@@ -507,6 +510,8 @@ let reconnectTimer = null;
 let sessionEnded = false;
 let sessionWaiters = [];
 let chatSessionId = createChatSessionId();
+let activeChatAbortController = null;
+let textResponseActive = false;
 
 function createChatSessionId() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -624,6 +629,35 @@ function openComposer() {
     document.getElementById('txtMessage').focus();
 }
 
+function renderComposerAction() {
+    const button = document.getElementById('composerAction');
+    if (!button) return;
+    const canStop = textResponseActive || avatarSpeaking;
+    button.classList.toggle('stop-response', canStop);
+    button.innerHTML = canStop
+        ? '<i class="bi bi-stop-fill" aria-hidden="true"></i>'
+        : '<i class="bi bi-mic-fill" aria-hidden="true"></i>';
+    const label = canStop ? 'Stop response' : 'Speak instead';
+    button.title = label;
+    button.setAttribute('aria-label', label);
+}
+
+async function handleComposerAction() {
+    if (textResponseActive || avatarSpeaking) {
+        await stopTextResponse();
+        return;
+    }
+    await startVoiceMode();
+}
+
+async function stopTextResponse() {
+    if (activeChatAbortController) activeChatAbortController.abort();
+    activeChatAbortController = null;
+    textResponseActive = false;
+    await interrupt();
+    renderComposerAction();
+}
+
 // Voice mode: hide the strip, reveal the cluster under the avatar, and start
 // capturing right away — pressing the mic IS the press-to-speak. toggleMic()
 // unlocks audio and kicks off a cold session without awaiting it, so Ditto
@@ -655,13 +689,19 @@ function endConversation() {
     closeEndSessionDialog();
     stopMic(false);
     interrupt();
+    if (activeChatAbortController) activeChatAbortController.abort();
+    activeChatAbortController = null;
+    textResponseActive = false;
     latencyTurn++;
     speakGen++;
     speakQueue = Promise.resolve();
     avatarSpeaking = false;
     renderMicButton();
     const video = document.getElementById('video');
+    const remoteAudio = document.getElementById('remoteAudio');
     video.muted = true;
+    remoteAudio.pause();
+    remoteAudio.muted = true;
     outputAudioUnlocked = false;
     document.getElementById('chatResponse').replaceChildren();
     document.getElementById('txtMessage').value = '';
@@ -755,6 +795,7 @@ async function toggleMic() {
     const startGeneration = ++micStartGeneration;
     micStarting = true;
     renderMicButton();
+    renderComposerAction();
     try {
         micStream = await navigator.mediaDevices.getUserMedia({
             audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1 },
@@ -948,8 +989,16 @@ async function start() {
     pc = peer;
     const stream = new MediaStream();
     const video = document.getElementById('video');
+    const remoteAudio = document.getElementById('remoteAudio');
     peer.addEventListener('track', evt => {
         if (pc !== peer) return;
+        if (evt.track.kind === 'audio') {
+            remoteAudio.pause();
+            remoteAudio.srcObject = new MediaStream([evt.track]);
+            remoteAudio.muted = !outputAudioUnlocked;
+            remoteAudio.play().catch(error => console.warn('remote audio playback blocked', error));
+            return;
+        }
         if (!stream.getTracks().some(track => track.id === evt.track.id)) {
             stream.addTrack(evt.track);
         }
@@ -958,7 +1007,7 @@ async function start() {
         video.removeAttribute('src');
         video.srcObject = stream;
         video.loop = false;
-        video.muted = !outputAudioUnlocked;
+        video.muted = true;
         video.play().catch(() => {});
     });
     peer.addEventListener('connectionstatechange', () => {
@@ -989,11 +1038,16 @@ const INITIAL_AVATAR_ID = 'ditto_man';
 
 function unlockOutputAudio() {
     const video = document.getElementById('video');
+    const remoteAudio = document.getElementById('remoteAudio');
     outputAudioUnlocked = true;
-    // Keep the local source-video preview silent. The remote WebRTC stream is
-    // unmuted as soon as its first track arrives.
-    video.muted = !video.srcObject;
+    // Preview video is always silent. WebRTC audio is played independently so
+    // a late-arriving audio track cannot be lost inside the video stream.
+    video.muted = true;
     video.play().catch(() => {});
+    if (remoteAudio?.srcObject) {
+        remoteAudio.muted = false;
+        remoteAudio.play().catch(error => console.warn('remote audio playback blocked', error));
+    }
 }
 
 // Send one sentence to the avatar to speak (echo = speak the given text verbatim)
@@ -1167,7 +1221,7 @@ function createLinkQr(url) {
     wrap.className = 'link-qr';
     const qr = document.createElement('img');
     qr.alt = 'QR code';
-    qr.src = 'https://api.qrserver.com/v1/create-qr-code/?size=240x240&format=svg&data=' + encodeURIComponent(href);
+    qr.src = '/api/qr?data=' + encodeURIComponent(href);
     wrap.append(qr);
     return wrap;
 }
@@ -1297,6 +1351,7 @@ async function sendText(textOverride = null, showUserBubble = true) {
     const text = (textOverride == null ? el.value : textOverride).trim();
     const mode = document.getElementById('txtType').value;
     if (!text) return;
+    if (textResponseActive) await stopTextResponse();
     ensureSession();
     const startedAt = performance.now();
     const turn = ++latencyTurn;
@@ -1319,6 +1374,10 @@ async function sendText(textOverride = null, showUserBubble = true) {
     // so the avatar starts on sentence 1 instead of waiting for the whole reply.
     const botBubble = addBubble('bot', '');
     const metrics = addLatencyRow(botBubble);
+    const controller = new AbortController();
+    activeChatAbortController = controller;
+    textResponseActive = true;
+    renderComposerAction();
     const interruptPromise = interrupt();  // stop speech while the chat request starts in parallel
     speakQueue = interruptPromise.catch(() => {});
     interruptPromise.then(() => {
@@ -1347,6 +1406,7 @@ async function sendText(textOverride = null, showUserBubble = true) {
         const resp = await fetch(CHAT_API_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
+            signal: controller.signal,
             body: JSON.stringify({
                 message: text,
                 session_id: chatSessionId,
@@ -1382,8 +1442,15 @@ async function sendText(textOverride = null, showUserBubble = true) {
         flushSentences(true);                         // speak the final partial sentence
         setLatency(metrics.complete, startedAt, 'completeResponse');
     } catch (e) {
+        if (e.name === 'AbortError') return;
         reply += '\n[error: ' + (e.message || e) + ']';
         renderBotBubble(botBubble, reply);
+    } finally {
+        if (activeChatAbortController === controller) {
+            activeChatAbortController = null;
+            textResponseActive = false;
+            renderComposerAction();
+        }
     }
 }
 
@@ -1393,6 +1460,7 @@ function interrupt() {
     speakQueue = Promise.resolve();
     avatarSpeaking = false;
     renderMicButton();
+    renderComposerAction();
     if (!sessionid) return Promise.resolve();
     return fetch('/interrupt_talk', {
         method: 'POST',
@@ -1457,6 +1525,7 @@ async function syncAvatarSpeaking() {
         if (speaking !== avatarSpeaking) {
             avatarSpeaking = speaking;
             renderMicButton();
+            renderComposerAction();
         }
     } catch (error) { /* reconnect loop owns transport errors */ }
 }
@@ -1472,6 +1541,9 @@ async function switchAvatar() {
     if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
     setSessionId(null);
     document.getElementById('video').srcObject = null;
+    const remoteAudio = document.getElementById('remoteAudio');
+    remoteAudio.pause();
+    remoteAudio.srcObject = null;
     remoteStream = null;
     updateLandingSource();
     await start();   // start()/negotiate() reads #avatarSelect
