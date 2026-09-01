@@ -10,7 +10,8 @@ def test_avatar_frontend_contract():
         "KB first:", "KB done:", "TTS first:", "TTS after text:", "Total:"
     ))
     assert 'id="latencyFirst"' not in html
-    assert "template.innerHTML = DOMPurify.sanitize(marked.parse(markdown))" in html
+    assert "renderer.em = token => token.text" in html
+    assert "marked.parse(markdown, { renderer })" in html
     assert "content.replaceChildren()" in html
     assert "className = 'chat-media'" in html
     assert "(?:mp4|mov|webm)" in html

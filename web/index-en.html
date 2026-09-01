@@ -205,13 +205,15 @@
         .chat-bot { margin-right: auto; padding-bottom: 10px; background: var(--chat-bubble-bot); color: var(--chat-fg); }
         /* Speech tail on the assistant bubble, matching the kiosk reference. */
         .chat-bot::before { content: ''; position: absolute; left: -7px; bottom: 8px; width: 0; height: 0; border-right: 10px solid var(--chat-bubble-bot); border-top: 12px solid transparent; }
-        .chat-bot .bubble-content { padding-right: 64px; }
+        /* Markdown creates HTML blocks; normal whitespace prevents source newlines
+           between those blocks from becoming extra blank lines. */
+        .chat-bot .bubble-content { padding-right: 64px; white-space: normal; }
         .chat-bot .bubble-content > :first-child { margin-top: 0; }
         .chat-bot .bubble-content > :last-child { margin-bottom: 0; }
-        .chat-bot .bubble-content p { margin: 0 0 0.65em; }
+        .chat-bot .bubble-content p { margin: 0 0 8px; }
         .chat-bot .bubble-content ul,
-        .chat-bot .bubble-content ol { margin: 0.55em 0; padding-left: 1.45em; }
-        .chat-bot .bubble-content li { margin: 0.2em 0; }
+        .chat-bot .bubble-content ol { margin: 8px 0; padding-left: 1.45em; }
+        .chat-bot .bubble-content li { margin: 4px 0; }
         .bubble-feedback { position: absolute; right: 9px; bottom: 5px; display: flex; gap: 2px; }
         .bubble-feedback[hidden] { display: none; }
         .feedback-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--chat-accent); font-size: 0.96rem; transition: color 140ms ease, background 140ms ease, transform 140ms ease; }
@@ -1384,7 +1386,11 @@ function renderBotBubble(el, text) {
             return;
         }
         const template = document.createElement('template');
-        template.innerHTML = DOMPurify.sanitize(marked.parse(markdown));
+        const renderer = new marked.Renderer();
+        // API replies sometimes use single asterisks as punctuation. Keep
+        // bold Markdown, but render single-asterisk emphasis as plain text.
+        renderer.em = token => token.text;
+        template.innerHTML = DOMPurify.sanitize(marked.parse(markdown, { renderer }));
         content.appendChild(template.content);
     };
     content.replaceChildren();
