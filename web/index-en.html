@@ -167,8 +167,8 @@
         .landing-prompts { width: 100%; margin-bottom: 20px; overflow: hidden; mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); -webkit-mask-image: linear-gradient(to right, transparent, #000 7%, #000 93%, transparent); }
         .prompt-row { width: 100%; overflow: hidden; }
         .prompt-row + .prompt-row { margin-top: 9px; }
-        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 20s linear infinite; }
-        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 22s; }
+        .prompt-track { display: flex; width: max-content; will-change: transform; animation: prompt-scroll 26s linear infinite; }
+        .prompt-row.reverse .prompt-track { animation-name: prompt-scroll-reverse; animation-duration: 28s; }
         .prompt-group { display: flex; flex: 0 0 auto; gap: 10px; padding-right: 10px; }
         .prompt-chip { flex: 0 0 auto; min-height: 44px; padding: 9px 20px; border: 0; border-radius: 999px; background: rgba(88, 90, 96, 0.62); color: #fff; font-size: 1rem; font-weight: 500; white-space: nowrap; backdrop-filter: blur(10px); }
         .prompt-chip:hover { background: rgba(118, 121, 128, 0.82); }
@@ -192,7 +192,7 @@
         #video { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center; border-radius: 0; background: #000 !important; }
         .avatar-voice-control { position: absolute; z-index: 4; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; align-items: center; gap: 12px; }
         #offerError { position: absolute; z-index: 3; top: 18px; left: 18px; right: 18px; margin: 0; border-radius: 6px; }
-        .chat-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 0; background: var(--chat-bg); }
+        .chat-pane { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 0; background: var(--chat-bg); }
         .chat-toolbar { flex: 0 0 96px; padding: 18px 14px 0 22px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 0; background: var(--chat-bg); }
         .chat-brand { color: var(--chat-muted); font-size: 0.72rem; line-height: 1.3; text-align: left; }
         .chat-brand strong { display: block; color: var(--chat-fg); font-size: 1.2rem; font-weight: 760; letter-spacing: -0.01em; }
@@ -301,9 +301,9 @@
 
         .end-session-backdrop { position: absolute; z-index: 40; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(15, 23, 42, 0.52); }
         .end-session-backdrop[hidden] { display: none; }
-        .end-session-dialog { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: min(420px, 100%); aspect-ratio: 4 / 3; padding: 26px 30px; border: 0; border-radius: 8px; background: #303030; color: #fff; text-align: center; box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42); }
-        .end-session-dialog h2 { margin: 0; font-size: 1.5rem; font-weight: 760; }
-        .end-session-dialog p { margin: 0; font-size: 1rem; line-height: 1.45; font-weight: 500; }
+        .end-session-dialog { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: min(420px, 100%); padding: 24px 30px; border: 0; border-radius: 8px; background: #303030; color: #fff; text-align: center; box-shadow: 0 22px 60px rgba(0, 0, 0, 0.42); }
+        .end-session-dialog h2 { margin: 0; font-size: 1.28rem; font-weight: 760; }
+        .end-session-dialog p { margin: 0; font-size: 0.9rem; line-height: 1.38; font-weight: 500; }
         .end-session-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 10px; }
         .end-session-actions button { min-height: 44px; padding: 0 18px; border-radius: 6px; font-weight: 720; }
         /* The info panel carries prose, so it opts out of the 4:3 confirm-dialog box. */
@@ -318,6 +318,21 @@
         .end-session-continue { border: 1px solid #f8fafc; background: #f8fafc; color: #1f2937; }
         .end-session-confirm { border: 1px solid #ff6b63; background: transparent; color: #fff; }
         .end-session-confirm:hover { background: #4a2525; }
+        .experience-rating { position: absolute; z-index: 12; top: 82px; right: 22px; width: min(340px, calc(100% - 44px)); padding: 18px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; color: var(--chat-fg); box-shadow: 0 12px 34px rgba(15, 23, 42, 0.18); }
+        .experience-rating[hidden] { display: none; }
+        .experience-rating h2 { margin: 0 32px 12px 0; font-size: 1rem; font-weight: 760; }
+        .rating-dismiss { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #64748b; }
+        .rating-dismiss:hover { background: #f1f5f9; color: #0f172a; }
+        .rating-stars { display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
+        .rating-star { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; border: 0; background: transparent; color: #cbd5e1; font-size: 1.35rem; }
+        .rating-star:hover, .rating-star.selected { color: #f6b51b; }
+        .rating-hint { margin: 2px 0 12px; color: #64748b; font-size: 0.8rem; text-align: left; }
+        .rating-comment { width: 100%; min-height: 74px; resize: vertical; padding: 9px 10px; border: 1px solid #cbd5e1; border-radius: 7px; color: var(--chat-fg); font: inherit; font-size: 0.86rem; line-height: 1.35; }
+        .rating-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; }
+        .rating-actions button { min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
+        .rating-not-now { border: 0; background: transparent; color: #64748b; }
+        .rating-send { border: 0; background: #8fcaca; color: #fff; }
+        .rating-send:hover { background: #69b8b5; }
         @media (max-width: 900px) {
             .avatar-voice-control { bottom: 12px; gap: 8px; }
             .voice-control { min-width: 224px; height: 54px; padding: 0 18px; }
@@ -352,6 +367,18 @@
                             <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('What causes cavities?')">What causes cavities?</button>
                             <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('What foods are bad for my teeth?')">What foods are bad for my teeth?</button>
                         </div>
+                        <div class="prompt-group" aria-hidden="true">
+                            <button class="prompt-chip" type="button" tabindex="-1">How should I brush my teeth properly?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">Why do I need to floss?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">What causes cavities?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">What foods are bad for my teeth?</button>
+                        </div>
+                        <div class="prompt-group" aria-hidden="true">
+                            <button class="prompt-chip" type="button" tabindex="-1">How should I brush my teeth properly?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">Why do I need to floss?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">What causes cavities?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">What foods are bad for my teeth?</button>
+                        </div>
                     </div>
                 </div>
                 <div class="prompt-row reverse">
@@ -367,6 +394,18 @@
                             <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('How can I prevent tooth decay?')">How can I prevent tooth decay?</button>
                             <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('I just had dental treatment. What should I do now?')">I just had dental treatment. What should I do now?</button>
                             <button class="prompt-chip" type="button" tabindex="-1" onclick="enterConversationWithPrompt('When should I tell the dentist something is wrong?')">When should I tell the dentist something is wrong?</button>
+                        </div>
+                        <div class="prompt-group" aria-hidden="true">
+                            <button class="prompt-chip" type="button" tabindex="-1">Why are my gums bleeding?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">How can I prevent tooth decay?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">I just had dental treatment. What should I do now?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">When should I tell the dentist something is wrong?</button>
+                        </div>
+                        <div class="prompt-group" aria-hidden="true">
+                            <button class="prompt-chip" type="button" tabindex="-1">Why are my gums bleeding?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">How can I prevent tooth decay?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">I just had dental treatment. What should I do now?</button>
+                            <button class="prompt-chip" type="button" tabindex="-1">When should I tell the dentist something is wrong?</button>
                         </div>
                     </div>
                 </div>
@@ -497,6 +536,23 @@
                     <div id="chatResponse"></div>
                 </div>
             </div>
+            <aside id="experienceRating" class="experience-rating" hidden aria-label="Rate your experience">
+                <button class="rating-dismiss" type="button" onclick="dismissExperienceRating()" aria-label="Close rating"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                <h2>Please rate your experience</h2>
+                <div class="rating-stars" role="radiogroup" aria-label="Rate your experience">
+                    <button class="rating-star" type="button" data-rating="1" onclick="selectExperienceRating(1)" role="radio" aria-checked="false" aria-label="1 star"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                    <button class="rating-star" type="button" data-rating="2" onclick="selectExperienceRating(2)" role="radio" aria-checked="false" aria-label="2 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                    <button class="rating-star" type="button" data-rating="3" onclick="selectExperienceRating(3)" role="radio" aria-checked="false" aria-label="3 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                    <button class="rating-star" type="button" data-rating="4" onclick="selectExperienceRating(4)" role="radio" aria-checked="false" aria-label="4 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                    <button class="rating-star" type="button" data-rating="5" onclick="selectExperienceRating(5)" role="radio" aria-checked="false" aria-label="5 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                </div>
+                <p class="rating-hint">Tap a star to rate</p>
+                <textarea id="experienceRatingComment" class="rating-comment" placeholder="What could we improve? (optional)"></textarea>
+                <div class="rating-actions">
+                    <button class="rating-not-now" type="button" onclick="dismissExperienceRating()">Not now</button>
+                    <button class="rating-send" type="button" onclick="submitExperienceRating()">Send feedback</button>
+                </div>
+            </aside>
         </div>
     </div>
     <div class="chat-composer">
@@ -517,12 +573,67 @@ let sessionWaiters = [];
 let chatSessionId = createChatSessionId();
 let activeChatAbortController = null;
 let textResponseActive = false;
+let experienceRatingTimer = null;
+let experienceRatingShown = false;
+let experienceRatingEligible = false;
+let experienceRatingValue = 0;
 
 function createChatSessionId() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
         return window.crypto.randomUUID();
     }
     return 'chat-' + Date.now() + '-' + Math.random().toString(36).slice(2);
+}
+
+function resetExperienceRating() {
+    if (experienceRatingTimer) {
+        clearTimeout(experienceRatingTimer);
+        experienceRatingTimer = null;
+    }
+    experienceRatingShown = false;
+    experienceRatingEligible = false;
+    experienceRatingValue = 0;
+    const panel = document.getElementById('experienceRating');
+    if (panel) panel.hidden = true;
+    document.querySelectorAll('.rating-star').forEach(star => {
+        star.classList.remove('selected');
+        star.setAttribute('aria-checked', 'false');
+    });
+    const comment = document.getElementById('experienceRatingComment');
+    if (comment) comment.value = '';
+}
+
+function scheduleExperienceRating() {
+    if (experienceRatingShown || experienceRatingTimer || !experienceRatingEligible) return;
+    experienceRatingTimer = window.setTimeout(() => {
+        experienceRatingTimer = null;
+        if (document.getElementById('conversationView').hidden) return;
+        experienceRatingShown = true;
+        document.getElementById('experienceRating').hidden = false;
+    }, 8000);
+}
+
+function dismissExperienceRating() {
+    if (experienceRatingTimer) {
+        clearTimeout(experienceRatingTimer);
+        experienceRatingTimer = null;
+    }
+    experienceRatingShown = true;
+    document.getElementById('experienceRating').hidden = true;
+}
+
+function selectExperienceRating(value) {
+    experienceRatingValue = value;
+    document.querySelectorAll('.rating-star').forEach(star => {
+        const selected = Number(star.dataset.rating) <= value;
+        star.classList.toggle('selected', selected);
+        star.setAttribute('aria-checked', String(Number(star.dataset.rating) === value));
+    });
+}
+
+function submitExperienceRating() {
+    // This is intentionally local-only UI; no rating or comment is sent anywhere.
+    dismissExperienceRating();
 }
 
 function updateStatus(connected) {
@@ -710,6 +821,7 @@ function endConversation() {
     outputAudioUnlocked = false;
     document.getElementById('chatResponse').replaceChildren();
     document.getElementById('txtMessage').value = '';
+    resetExperienceRating();
     chatSessionId = createChatSessionId();
     document.getElementById('offerError').style.display = 'none';
     const app = document.getElementById('app');
@@ -726,6 +838,7 @@ document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
     if (!document.getElementById('endSessionDialog').hidden) closeEndSessionDialog();
     if (!document.getElementById('infoDialog').hidden) closeInfoDialog();
+    if (!document.getElementById('experienceRating').hidden) dismissExperienceRating();
 });
 
 // --- Voice input (browser SpeechRecognition, matching avatar_ui) ---
@@ -1204,6 +1317,7 @@ function addBubble(who, text) {
         div.appendChild(feedback);
     }
     out.appendChild(div);
+    if (who === 'bot' && text.trim()) experienceRatingEligible = true;
     out.scrollTop = out.scrollHeight;
     return div;
 }
@@ -1586,6 +1700,7 @@ async function syncAvatarSpeaking() {
             activeLatencyMetrics.totalRecorded = true;
             setLatency(activeLatencyMetrics.total, activeLatencyMetrics.startedAt, 'total');
         }
+        if (!speaking && wasSpeaking) scheduleExperienceRating();
     } catch (error) { /* reconnect loop owns transport errors */ }
 }
 

@@ -51,8 +51,8 @@ def test_avatar_frontend_contract():
     assert "'../assets/idle.mp4'" in html
     assert "'../assets/woman.mp4'" in html
     assert "'/api/avatar-idle/' + encodeURIComponent(avatarId)" in html
-    assert "animation: prompt-scroll 20s linear infinite" in html
-    assert "animation-duration: 22s" in html
+    assert "animation: prompt-scroll 26s linear infinite" in html
+    assert "animation-duration: 28s" in html
     assert "setPreviewSource(document.getElementById('video'), sourceUrl)" in html
     assert "Press to Talk" in html
     assert 'class="landing-prompts"' in html
@@ -65,6 +65,15 @@ def test_avatar_frontend_contract():
     assert 'Are you sure you want to leave?' in html
     assert 'Continue Chatting' in html
     assert 'End Session' in html
+    assert 'id="experienceRating"' in html
+    assert 'Please rate your experience' in html
+    assert 'Tap a star to rate' in html
+    assert 'function scheduleExperienceRating()' in html
+    assert '}, 8000);' in html
+    assert "if (!speaking && wasSpeaking) scheduleExperienceRating();" in html
+    assert "if (who === 'bot' && text.trim()) experienceRatingEligible = true;" in html
+    assert "function resetExperienceRating()" in html
+    assert "resetExperienceRating();" in html
     assert "function openEndSessionDialog()" in html
     assert "function closeEndSessionDialog()" in html
     assert "document.getElementById('chatResponse').replaceChildren()" in html
@@ -174,7 +183,9 @@ def test_avatar_frontend_contract():
     assert html.index('class="chat-toolbar"') < html.index('id="chatResponse"')
     assert html.index('id="chatResponse"') < html.index('class="chat-composer"')
     assert html.index('class="chat-composer"') < html.index("<script>")
-    assert "aspect-ratio: 4 / 3" in html
+    assert "width: min(420px, 100%); padding: 24px 30px" in html
+    assert "font-size: 1.28rem" in html
+    assert "font-size: 0.9rem" in html
     assert ".end-session-actions { display: flex; flex-wrap: wrap; justify-content: center;" in html
     assert "#chatResponse { flex: 1;" in html
     assert "overflow-y: auto !important" in html
@@ -292,7 +303,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert 'source "$APP_ROOT/docker/ditto-env.sh"' in start
     assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
-    assert "DITTO_EXP=${DITTO_EXP:-0.65}" in script
+    assert "DITTO_EXP=${DITTO_EXP:-0.63}" in script
     assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1152}" in script
     assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.4}" in script
     assert "DITTO_PAUSE_CLOSE_MS=${DITTO_PAUSE_CLOSE_MS:-120}" in script
