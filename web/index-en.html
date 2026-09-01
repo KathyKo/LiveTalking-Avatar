@@ -733,6 +733,9 @@ let speechRecognition = null, speechFinalText = '', speechInterimText = '';
 let micCtx = null, micStream = null, micSource = null;
 let micAnalyser = null, micVisualFrame = null, micOn = false, micStarting = false, micProcessing = false, avatarSpeaking = false;
 let micStartGeneration = 0;
+const AUTO_SUBMIT_SILENCE_MS = 1200;
+const VOICE_ACTIVITY_RMS = 0.018;
+let micDetectedSpeech = false, micSilenceSince = 0;
 
 function resetVoiceBars() {
     document.querySelectorAll('.voice-bar').forEach(bar => { bar.style.height = '4px'; });
@@ -755,6 +758,27 @@ function drawVoiceBars() {
         const normalized = values[index * step] / 255;
         bar.style.height = `${4 + normalized * 20}px`;
     });
+    const samples = new Uint8Array(micAnalyser.fftSize);
+    micAnalyser.getByteTimeDomainData(samples);
+    let squareSum = 0;
+    for (const sample of samples) {
+        const centered = (sample - 128) / 128;
+        squareSum += centered * centered;
+    }
+    const rms = Math.sqrt(squareSum / samples.length);
+    const now = performance.now();
+    if (rms >= VOICE_ACTIVITY_RMS) {
+        micDetectedSpeech = true;
+        micSilenceSince = 0;
+    } else if (micDetectedSpeech && !micProcessing) {
+        if (!micSilenceSince) micSilenceSince = now;
+        if (now - micSilenceSince >= AUTO_SUBMIT_SILENCE_MS) {
+            micDetectedSpeech = false;
+            micSilenceSince = 0;
+            stopMic(true);
+            return;
+        }
+    }
     micVisualFrame = requestAnimationFrame(drawVoiceBars);
 }
 
@@ -821,6 +845,8 @@ async function toggleMic() {
     micStarting = false;
     micOn = true;
     micProcessing = false;
+    micDetectedSpeech = false;
+    micSilenceSince = 0;
     speechFinalText = '';
     speechInterimText = '';
     renderMicButton();
@@ -875,6 +901,8 @@ function stopMic(sendStop) {
     if (micCtx) { micCtx.close(); micCtx = null; }
     if (micStream) { micStream.getTracks().forEach(t => t.stop()); micStream = null; }
     micOn = false;
+    micDetectedSpeech = false;
+    micSilenceSince = 0;
     if (speechRecognition && sendStop) {
         micProcessing = true;
         try { speechRecognition.stop(); } catch (error) { finishBrowserRecognition(); }

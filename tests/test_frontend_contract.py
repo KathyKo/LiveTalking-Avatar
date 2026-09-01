@@ -211,6 +211,9 @@ def test_avatar_frontend_contract():
     assert "function stopVoiceVisualization()" in html
     assert "document.querySelectorAll('.voice-bar')" in html
     assert html.count('class="voice-bar"') == 12
+    assert "const AUTO_SUBMIT_SILENCE_MS = 1200;" in html
+    assert "const VOICE_ACTIVITY_RMS = 0.018;" in html
+    assert "micAnalyser.getByteTimeDomainData(samples);" in html
     assert "async function handleVoiceControl()" in html
     assert "micProcessing = false" in html
     assert "micStarting = false" in html
@@ -298,7 +301,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_HOLD=${DITTO_HOLD:-0.10}" in script
     assert "DITTO_TAIL_MS=${DITTO_TAIL_MS:-500}" in script
     assert "DITTO_IDLE_FADE_MS" not in script
-    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-240}" in script
+    assert "DITTO_AV_OFFSET_MS=${DITTO_AV_OFFSET_MS:-220}" in script
     assert "DITTO_FINAL_HOLD_MS=${DITTO_FINAL_HOLD_MS:-240}" in script
     assert "DITTO_GENERATE_IDLE=${DITTO_GENERATE_IDLE:-0}" in script
     assert "DITTO_USE_GENERATED_IDLE=${DITTO_USE_GENERATED_IDLE:-0}" in script
