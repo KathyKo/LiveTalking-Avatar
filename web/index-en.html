@@ -318,7 +318,7 @@
         .end-session-continue { border: 1px solid #f8fafc; background: #f8fafc; color: #1f2937; }
         .end-session-confirm { border: 1px solid #ff6b63; background: transparent; color: #fff; }
         .end-session-confirm:hover { background: #4a2525; }
-        .experience-rating { position: absolute; z-index: 12; top: 82px; right: 22px; width: min(340px, calc(100% - 44px)); padding: 18px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; color: var(--chat-fg); box-shadow: 0 12px 34px rgba(15, 23, 42, 0.18); }
+        .experience-rating { position: absolute; z-index: 12; bottom: 104px; left: 22px; width: min(340px, calc(100% - 44px)); padding: 18px; border: 1px solid #dbe3ef; border-radius: 12px; background: #fff; color: var(--chat-fg); box-shadow: 0 12px 34px rgba(15, 23, 42, 0.18); }
         .experience-rating[hidden] { display: none; }
         .experience-rating h2 { margin: 0 32px 12px 0; font-size: 1rem; font-weight: 760; }
         .rating-dismiss { position: absolute; top: 10px; right: 10px; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: #64748b; }
@@ -331,8 +331,8 @@
         .rating-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-top: 12px; }
         .rating-actions button { min-height: 34px; padding: 0 12px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; }
         .rating-not-now { border: 0; background: transparent; color: #64748b; }
-        .rating-send { border: 0; background: #8fcaca; color: #fff; }
-        .rating-send:hover { background: #69b8b5; }
+        .rating-send { border: 0; background: #2563eb; color: #fff; }
+        .rating-send:hover { background: #1d4ed8; }
         @media (max-width: 900px) {
             .avatar-voice-control { bottom: 12px; gap: 8px; }
             .voice-control { min-width: 224px; height: 54px; padding: 0 18px; }
@@ -507,6 +507,23 @@
                                 <i class="bi bi-keyboard-fill" aria-hidden="true"></i>
                             </button>
                         </div>
+                        <aside id="experienceRating" class="experience-rating" hidden aria-label="Rate your experience">
+                            <button class="rating-dismiss" type="button" onclick="dismissExperienceRating()" aria-label="Close rating"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+                            <h2>Please rate your experience</h2>
+                            <div class="rating-stars" role="radiogroup" aria-label="Rate your experience">
+                                <button class="rating-star" type="button" data-rating="1" onclick="selectExperienceRating(1)" role="radio" aria-checked="false" aria-label="1 star"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                                <button class="rating-star" type="button" data-rating="2" onclick="selectExperienceRating(2)" role="radio" aria-checked="false" aria-label="2 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                                <button class="rating-star" type="button" data-rating="3" onclick="selectExperienceRating(3)" role="radio" aria-checked="false" aria-label="3 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                                <button class="rating-star" type="button" data-rating="4" onclick="selectExperienceRating(4)" role="radio" aria-checked="false" aria-label="4 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                                <button class="rating-star" type="button" data-rating="5" onclick="selectExperienceRating(5)" role="radio" aria-checked="false" aria-label="5 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
+                            </div>
+                            <p class="rating-hint">Tap a star to rate</p>
+                            <textarea id="experienceRatingComment" class="rating-comment" placeholder="What could we improve? (optional)"></textarea>
+                            <div class="rating-actions">
+                                <button class="rating-not-now" type="button" onclick="dismissExperienceRating()">Not now</button>
+                                <button class="rating-send" type="button" onclick="submitExperienceRating()">Send feedback</button>
+                            </div>
+                        </aside>
                     </div>
                 </div>
             </div>
@@ -536,23 +553,6 @@
                     <div id="chatResponse"></div>
                 </div>
             </div>
-            <aside id="experienceRating" class="experience-rating" hidden aria-label="Rate your experience">
-                <button class="rating-dismiss" type="button" onclick="dismissExperienceRating()" aria-label="Close rating"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
-                <h2>Please rate your experience</h2>
-                <div class="rating-stars" role="radiogroup" aria-label="Rate your experience">
-                    <button class="rating-star" type="button" data-rating="1" onclick="selectExperienceRating(1)" role="radio" aria-checked="false" aria-label="1 star"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
-                    <button class="rating-star" type="button" data-rating="2" onclick="selectExperienceRating(2)" role="radio" aria-checked="false" aria-label="2 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
-                    <button class="rating-star" type="button" data-rating="3" onclick="selectExperienceRating(3)" role="radio" aria-checked="false" aria-label="3 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
-                    <button class="rating-star" type="button" data-rating="4" onclick="selectExperienceRating(4)" role="radio" aria-checked="false" aria-label="4 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
-                    <button class="rating-star" type="button" data-rating="5" onclick="selectExperienceRating(5)" role="radio" aria-checked="false" aria-label="5 stars"><i class="bi bi-star-fill" aria-hidden="true"></i></button>
-                </div>
-                <p class="rating-hint">Tap a star to rate</p>
-                <textarea id="experienceRatingComment" class="rating-comment" placeholder="What could we improve? (optional)"></textarea>
-                <div class="rating-actions">
-                    <button class="rating-not-now" type="button" onclick="dismissExperienceRating()">Not now</button>
-                    <button class="rating-send" type="button" onclick="submitExperienceRating()">Send feedback</button>
-                </div>
-            </aside>
         </div>
     </div>
     <div class="chat-composer">
