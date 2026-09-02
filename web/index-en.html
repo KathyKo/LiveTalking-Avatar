@@ -177,8 +177,8 @@
         .landing-actions { display: flex; align-items: center; justify-content: center; gap: 20px; }
         .landing-ask { min-width: 268px; min-height: 74px; padding: 0 34px; border: 3px solid var(--kiosk-glow); border-radius: 999px; background: #0a0a0a; color: #fff; font-size: 1.3rem; font-weight: 760; box-shadow: 0 0 20px var(--kiosk-glow-soft), 0 0 46px var(--kiosk-glow-soft); transition: box-shadow 160ms ease; }
         .landing-ask:hover { box-shadow: 0 0 28px var(--kiosk-glow), 0 0 62px var(--kiosk-glow-soft); }
-        .landing-footer { margin-top: 16px; color: rgba(255, 255, 255, 0.86); font-size: 0.72rem; line-height: 1.3; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
-        .landing-footer strong { display: block; font-size: 1.2rem; font-weight: 760; letter-spacing: -0.01em; }
+        .landing-footer { display: flex; flex-direction: column; align-items: center; margin-top: 16px; color: rgba(255, 255, 255, 0.86); font-size: 0.72rem; line-height: 1.3; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.55); }
+        .landing-brand-logo { display: block; width: min(132px, 34vw); height: auto; margin-top: 3px; filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.45)); }
         /* Round satellite button — flanks the primary pill on both the landing and the avatar stage. */
         .round-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; background: rgba(60, 60, 64, 0.86); color: #fff; font-size: 1.2rem; backdrop-filter: blur(8px); transition: background 160ms ease; }
         .round-button:hover { background: rgba(104, 106, 112, 0.94); }
@@ -195,7 +195,7 @@
         .chat-pane { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; border-left: 0; background: var(--chat-bg); }
         .chat-toolbar { flex: 0 0 96px; padding: 18px 14px 0 22px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; border-bottom: 0; background: var(--chat-bg); }
         .chat-brand { color: var(--chat-muted); font-size: 0.72rem; line-height: 1.3; text-align: left; }
-        .chat-brand strong { display: block; color: var(--chat-fg); font-size: 1.2rem; font-weight: 760; letter-spacing: -0.01em; }
+        .chat-brand-logo { display: block; width: 126px; height: auto; margin-top: 3px; }
         .chat-toolbar-actions { display: inline-flex; align-items: center; gap: 10px; }
         .conversation-exit { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--chat-muted); font-size: 1.2rem; }
         .conversation-exit:hover { background: #f1f5f9; color: var(--kiosk-brand); }
@@ -263,7 +263,7 @@
             .main-layout { grid-template-columns: 1fr; grid-template-rows: minmax(0, 48%) minmax(0, 52%); }
             .chat-pane { border-top: 1px solid var(--kiosk-line); border-left: 0; }
             .chat-toolbar { flex-basis: 70px; padding: 12px 8px 0 14px; }
-            .chat-brand strong { font-size: 1.02rem; }
+            .chat-brand-logo { width: 108px; }
             #chatResponse { padding: 4px 14px 14px; }
             .chat-composer { padding: 10px 14px 12px; }
             .landing-content { padding-bottom: 14px; }
@@ -421,7 +421,7 @@
                     <i class="bi bi-mic-fill" aria-hidden="true"></i>
                 </button>
             </div>
-            <div class="landing-footer">Powered by <strong>voncierge</strong></div>
+        <div class="landing-footer">Powered by <img class="landing-brand-logo" src="Voncierge_White%20logo.png" alt="Voncierge"></div>
         </div>
     </section>
     <div id="endSessionDialog" class="end-session-backdrop" hidden>
@@ -534,7 +534,7 @@
         <!-- Right Column: Drivers + Actions -->
         <div class="chat-pane">
             <div class="chat-toolbar">
-                <div class="chat-brand">Powered by <strong>voncierge</strong></div>
+                <div class="chat-brand">Powered by <img class="chat-brand-logo" src="voncierge-logo.png" alt="Voncierge"></div>
                 <div class="chat-toolbar-actions">
                     <div class="avatar-selector">
                         <i class="bi bi-person-video3" aria-hidden="true"></i>
