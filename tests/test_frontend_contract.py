@@ -287,6 +287,12 @@ def test_avatar_idle_endpoint_is_limited_to_idle_video():
     assert 'app.router.add_get("/api/avatar-idle/{avatar_id}", avatar_idle_media)' in routes
 
 
+def test_avatar_switcher_uses_friendly_labels_for_all_bundled_avatars():
+    html = (ROOT / "web" / "index-en.html").read_text(encoding="utf-8")
+    assert "ditto_man_clinic: 'avatar_doctor'" in html
+    assert "ditto_woman_teacher: 'avatar_teacher'" in html
+
+
 def test_qr_codes_are_generated_locally():
     routes = (ROOT / "server" / "routes.py").read_text(encoding="utf-8")
     requirements = (ROOT / "docker" / "requirements.txt").read_text(encoding="utf-8")

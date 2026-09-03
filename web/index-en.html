@@ -1666,7 +1666,13 @@ async function loadAvatarList() {
         avatars.forEach(id => {
             const o = document.createElement('option');
             o.value = id;
-            o.textContent = id.replace(/^ditto_/, 'avatar_');
+            const avatarLabels = {
+                ditto_man: 'avatar_man',
+                ditto_woman: 'avatar_woman',
+                ditto_man_clinic: 'avatar_doctor',
+                ditto_woman_teacher: 'avatar_teacher',
+            };
+            o.textContent = avatarLabels[id] || id.replace(/^ditto_/, 'avatar_');
             if (id === preferred) o.selected = true;
             sel.appendChild(o);
         });

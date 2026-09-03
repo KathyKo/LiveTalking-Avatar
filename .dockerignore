@@ -18,6 +18,12 @@ data/avatars/*
 !data/avatars/ditto_man/
 !data/avatars/ditto_man/source.mp4
 !data/avatars/ditto_man/idle.mp4
+!data/avatars/ditto_man_clinic/
+!data/avatars/ditto_man_clinic/source.mp4
+!data/avatars/ditto_man_clinic/idle.mp4
+!data/avatars/ditto_woman_teacher/
+!data/avatars/ditto_woman_teacher/source.mp4
+!data/avatars/ditto_woman_teacher/idle.mp4
 models
 checkpoints
 ditto310
