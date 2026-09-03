@@ -291,6 +291,8 @@ def test_avatar_switcher_uses_friendly_labels_for_all_bundled_avatars():
     html = (ROOT / "web" / "index-en.html").read_text(encoding="utf-8")
     assert "ditto_man_clinic: 'avatar_doctor'" in html
     assert "ditto_woman_teacher: 'avatar_teacher'" in html
+    assert "'ditto_man_clinic': 'aSXZu6bgEOS8MXVRzjPi'" in html
+    assert "'ditto_woman_teacher': 'SEWXl8lPSO01tdGbWECX'" in html
 
 
 def test_qr_codes_are_generated_locally():
