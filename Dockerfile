@@ -36,6 +36,9 @@ WORKDIR /opt/livetalking
 COPY . .
 COPY data/avatars/ditto_woman /opt/default-avatars/ditto_woman
 COPY data/avatars/ditto_man /opt/default-avatars/ditto_man
+# The current bundled male avatar is maintained in assets/.  Keep the image
+# bundle and the homepage preview on the same source/idle clips.
+COPY assets/source.mp4 assets/idle.mp4 /opt/default-avatars/ditto_man/
 
 RUN rm -rf data \
     && chmod +x docker/start.sh \

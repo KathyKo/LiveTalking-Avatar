@@ -38,6 +38,7 @@ checkpoints/
 !.env.example
 !assets/woman.mp4
 !assets/source.mp4
+!assets/idle.mp4
 
 .claude/
 .agents/

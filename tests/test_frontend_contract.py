@@ -7,7 +7,7 @@ ROOT = Path(__file__).parents[1]
 def test_avatar_frontend_contract():
     html = (ROOT / "web" / "index-en.html").read_text(encoding="utf-8")
     assert all(metric in html for metric in (
-        "KB first:", "KB done:", "TTS first:", "TTS after text:", "Total:"
+        "KB first:", "KB done:", "TTS first:", "Avatar first:"
     ))
     assert 'id="latencyFirst"' not in html
     assert "renderer.em = token => token.text" in html
@@ -305,7 +305,7 @@ def test_ditto_defaults_to_fast_high_resolution_rendering():
     assert "DITTO_STEPS" not in start, "defaults must live in ditto-env.sh only"
     assert "DITTO_STEPS=${DITTO_STEPS:-5}" in script
     assert "DITTO_EXP=${DITTO_EXP:-0.63}" in script
-    assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1152}" in script
+    assert "DITTO_MAX_SIZE=${DITTO_MAX_SIZE:-1280}" in script
     assert "DITTO_LIP_RESPONSE=${DITTO_LIP_RESPONSE:-1.4}" in script
     assert "DITTO_PAUSE_CLOSE_MS=${DITTO_PAUSE_CLOSE_MS:-120}" in script
     assert "DITTO_FEED_CAP=${DITTO_FEED_CAP:-20}" in script

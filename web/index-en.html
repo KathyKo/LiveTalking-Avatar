@@ -1049,7 +1049,6 @@ async function finishBrowserRecognition() {
     renderMicButton();
     if (!clean) {
         document.getElementById('txtMessage').value = '';
-        addBubble('bot', '[no speech recognized]');
         return;
     }
     document.getElementById('txtMessage').value = clean;
@@ -1451,8 +1450,7 @@ function addLatencyRow(bubble) {
     row.innerHTML = '<span hidden>KB first: <strong></strong></span>' +
         '<span hidden>KB done: <strong></strong></span>' +
         '<span hidden>TTS first: <strong></strong></span>' +
-        '<span hidden>TTS after text: <strong></strong></span>' +
-        '<span hidden>Total: <strong></strong></span>';
+        '<span hidden>Avatar first: <strong></strong></span>';
     const feedback = bubble.querySelector('.bubble-feedback');
     bubble.insertBefore(row, feedback || null);
     const values = row.querySelectorAll('strong');
@@ -1460,9 +1458,7 @@ function addLatencyRow(bubble) {
         kbFirst: values[0],
         kbDone: values[1],
         ttsFirst: values[2],
-        ttsAfterText: values[3],
-        total: values[4],
-        totalRecorded: false,
+        avatarFirst: values[3],
     };
 }
 
@@ -1500,7 +1496,7 @@ async function watchAvatarTiming(startedAt, turn, metrics, baseline) {
             if (!gotAvatar && timing.avatar_seq > baseline.avatar_seq) {
                 gotAvatar = true;
                 metrics.avatarStarted = true;
-                setLatency(metrics.ttsAfterText, startedAt, 'ttsAfterText');
+                setLatency(metrics.avatarFirst, startedAt, 'avatarFirst');
             }
         } catch (e) { /* retry until timeout */ }
         await new Promise(resolve => setTimeout(resolve, 25));
@@ -1699,12 +1695,6 @@ async function syncAvatarSpeaking() {
             avatarSpeaking = speaking;
             renderMicButton();
             renderComposerAction();
-        }
-        if (!speaking && wasSpeaking && activeLatencyMetrics &&
-            activeLatencyMetrics.turn === latencyTurn && activeLatencyMetrics.avatarStarted &&
-            !activeLatencyMetrics.totalRecorded) {
-            activeLatencyMetrics.totalRecorded = true;
-            setLatency(activeLatencyMetrics.total, activeLatencyMetrics.startedAt, 'total');
         }
         if (!speaking && wasSpeaking) scheduleExperienceRating();
     } catch (error) { /* reconnect loop owns transport errors */ }

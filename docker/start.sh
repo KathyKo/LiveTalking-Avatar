@@ -42,6 +42,18 @@ for bundled_avatar in "$DEFAULT_AVATAR_ROOT"/*; do
         cp -a "$bundled_avatar" "$DATA_ROOT/avatars/$bundled_id"
         echo "Installed bundled avatar: $bundled_id"
     fi
+
+    # Refresh the stock media only when this image contains different clips.
+    # This lets a new image update an existing RunPod volume without touching
+    # any other avatar assets.
+    for media in source.mp4 idle.mp4; do
+        bundled_media="$bundled_avatar/$media"
+        target_media="$DATA_ROOT/avatars/$bundled_id/$media"
+        if [[ -f "$bundled_media" ]] && { [[ ! -f "$target_media" ]] || ! cmp -s "$bundled_media" "$target_media"; }; then
+            cp -f "$bundled_media" "$target_media"
+            echo "Refreshed bundled avatar media: $bundled_id/$media"
+        fi
+    done
 done
 ln -sfn "$DATA_ROOT" "$APP_ROOT/data"
 
