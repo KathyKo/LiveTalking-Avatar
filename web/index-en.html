@@ -1075,6 +1075,8 @@ function negotiate(peer) {
             'ditto_woman': 'SEWXl8lPSO01tdGbWECX',
             'ditto_man_clinic': 'aSXZu6bgEOS8MXVRzjPi',
             'ditto_woman_teacher': 'SEWXl8lPSO01tdGbWECX',
+            'ditto_malaywoman': '15Y62ZlO8it2f5wduybx',
+            'ditto_caucasian': '8Ln42OXYupYsag45MAUy',
             'avatar_man': 'aSXZu6bgEOS8MXVRzjPi',
             'avatar_woman2': 'SEWXl8lPSO01tdGbWECX',
         };
@@ -1673,6 +1675,8 @@ async function loadAvatarList() {
                 ditto_woman: 'avatar_woman',
                 ditto_man_clinic: 'avatar_doctor',
                 ditto_woman_teacher: 'avatar_teacher',
+                ditto_malaywoman: 'avatar_malaywoman',
+                ditto_caucasian: 'avatar_caucasianman',
             };
             o.textContent = avatarLabels[id] || id.replace(/^ditto_/, 'avatar_');
             if (id === preferred) o.selected = true;

@@ -24,6 +24,12 @@ data/avatars/*
 !data/avatars/ditto_woman_teacher/
 !data/avatars/ditto_woman_teacher/source.mp4
 !data/avatars/ditto_woman_teacher/idle.mp4
+!data/avatars/ditto_malaywoman/
+!data/avatars/ditto_malaywoman/source.mp4
+!data/avatars/ditto_malaywoman/idle.mp4
+!data/avatars/ditto_caucasian/
+!data/avatars/ditto_caucasian/source.mp4
+!data/avatars/ditto_caucasian/idle.mp4
 models
 checkpoints
 ditto310

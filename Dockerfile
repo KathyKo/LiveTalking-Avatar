@@ -38,6 +38,8 @@ COPY data/avatars/ditto_woman /opt/default-avatars/ditto_woman
 COPY data/avatars/ditto_man /opt/default-avatars/ditto_man
 COPY data/avatars/ditto_man_clinic /opt/default-avatars/ditto_man_clinic
 COPY data/avatars/ditto_woman_teacher /opt/default-avatars/ditto_woman_teacher
+COPY data/avatars/ditto_malaywoman /opt/default-avatars/ditto_malaywoman
+COPY data/avatars/ditto_caucasian /opt/default-avatars/ditto_caucasian
 # The current bundled male avatar is maintained in assets/.  Keep the image
 # bundle and the homepage preview on the same source/idle clips.
 COPY assets/source.mp4 assets/idle.mp4 /opt/default-avatars/ditto_man/
