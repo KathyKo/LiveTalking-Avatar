@@ -30,6 +30,9 @@ data/avatars/*
 !data/avatars/ditto_caucasian/
 !data/avatars/ditto_caucasian/source.mp4
 !data/avatars/ditto_caucasian/idle.mp4
+!data/avatars/ditto_cartoowoman/
+!data/avatars/ditto_cartoowoman/source.mp4
+!data/avatars/ditto_cartoowoman/idle.mp4
 models
 checkpoints
 ditto310

@@ -27,6 +27,7 @@ def test_default_ditto_avatars_are_bundled_without_overwriting_volume():
         "ditto_woman_teacher",
         "ditto_malaywoman",
         "ditto_caucasian",
+        "ditto_cartoowoman",
     ):
         assert f"COPY data/avatars/{avatar} /opt/default-avatars/{avatar}" in dockerfile
         assert f"!data/avatars/{avatar}/source.mp4" in ignore
