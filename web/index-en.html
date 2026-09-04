@@ -347,7 +347,7 @@
     <span class="session-badge disconnected visually-hidden" id="statusBadge"><span class="status-dot off"></span>Disconnected</span>
     <span class="visually-hidden" id="sessionIdDisplay">SID: -</span>
     <section id="landingView" class="view" aria-label="Avatar welcome screen">
-        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="/api/avatar-idle/ditto_man?v=idle-1"></video>
+        <video id="landingVideo" autoplay muted loop playsinline preload="auto" src="/api/avatar-idle/ditto_cartoowoman?v=idle-1"></video>
         <div class="landing-shade"></div>
         <div class="landing-content">
             <div class="landing-copy">
@@ -672,7 +672,12 @@ function selectedAvatarId() {
 
 function avatarPreviewUrl(avatarId) {
     if (window.location.protocol === 'file:') {
-        return avatarId === 'ditto_man' ? '../assets/idle.mp4' : '../assets/woman.mp4';
+        const localIdleVideos = {
+            ditto_man: '../assets/idle.mp4',
+            ditto_woman: '../assets/woman.mp4',
+            ditto_cartoowoman: '../data/avatars/ditto_cartoowoman/idle.mp4',
+        };
+        return localIdleVideos[avatarId] || '../assets/woman.mp4';
     }
     return '/api/avatar-idle/' + encodeURIComponent(avatarId) + '?v=idle-1';
 }
@@ -1075,7 +1080,7 @@ function negotiate(peer) {
             'ditto_woman': 'SEWXl8lPSO01tdGbWECX',
             'ditto_man_clinic': 'aSXZu6bgEOS8MXVRzjPi',
             'ditto_woman_teacher': 'SEWXl8lPSO01tdGbWECX',
-            'ditto_malaywoman': '15Y62ZlO8it2f5wduybx',
+            'ditto_malaywoman': 'qAJVXEQ6QgjOQ25KuoU8',
             'ditto_caucasian': '8Ln42OXYupYsag45MAUy',
             'ditto_cartoowoman': 'jqcCZkN6Knx8BJ5TBdYR',
             'avatar_man': 'aSXZu6bgEOS8MXVRzjPi',
@@ -1185,8 +1190,8 @@ async function start() {
 
 // --- Text / Chat ---
 const CHAT_API_URL = 'https://voncierge-lang-agent.hipster-virtual.com/chat/sse';
-const CHAT_AGENT_ID = 'DEVELOPMENT_HPB_17_215536fc419d4d45a6148239df3b1ba8';
-const INITIAL_AVATAR_ID = 'ditto_man';
+const CHAT_AGENT_ID = 'JTC_M';
+const INITIAL_AVATAR_ID = 'ditto_cartoowoman';
 
 function unlockOutputAudio() {
     const video = document.getElementById('video');
